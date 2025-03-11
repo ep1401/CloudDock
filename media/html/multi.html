@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-cloud Management</title>
+</head>
+<body>
+    <h4>Multi-cloud Management</h4>
+    <p>Manage instances across multiple cloud providers (AWS, Azure, etc.).</p>
+    <button id="syncInstancesBtn">Sync Cloud Instances</button>
+
+    <div id="multiCloudInstancesList"></div>
+
+    <script>
+        document.getElementById("syncInstancesBtn").addEventListener("click", function() {
+            // Send message to extension to sync instances across clouds
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({ type: "syncInstances" });
+        });
+
+        // Receive message from extension
+        window.addEventListener("message", event => {
+            const message = event.data;
+            if (message.type === "updateMultiCloudInstances") {
+                const instances = message.instances;
+                const multiCloudInstancesList = document.getElementById("multiCloudInstancesList");
+                multiCloudInstancesList.innerHTML = instances.map(instance => `<p>${instance}</p>`).join('');
+            }
+        });
+    </script>
+</body>
+</html>

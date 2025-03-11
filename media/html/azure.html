@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Azure Configuration</title>
+</head>
+<body>
+    <h4>Azure Instances</h4>
+    <p>Configure your Azure instances here.</p>
+    <button id="listAzureInstancesBtn">List Azure Instances</button>
+
+    <div id="azureInstancesList"></div>
+
+    <script>
+        document.getElementById("listAzureInstancesBtn").addEventListener("click", function() {
+            // Send message to extension to fetch Azure instances
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({ type: "listAzureInstances" });
+        });
+
+        // Receive message from extension
+        window.addEventListener("message", event => {
+            const message = event.data;
+            if (message.type === "updateAzureInstances") {
+                const instances = message.instances;
+                const azureInstancesList = document.getElementById("azureInstancesList");
+                azureInstancesList.innerHTML = instances.map(instance => `<p>${instance}</p>`).join('');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AWS Instance Setup</title>
+    <style>
+        .status-text {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #333;
+        }
+
+        .checkbox-column {
+            text-align: center;
+        }
+
+        .status-column {
+            font-size: 14px;
+        }
+
+        select, button {
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .section h5 {
+            margin-bottom: 10px;
+        }
+
+        /* Style for the small action buttons below the table */
+        .action-buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .action-buttons button {
+            width: auto;
+            margin: 5px;
+            padding: 5px 15px;
+            font-size: 12px;
+        }
+
+        .action-buttons button:hover {
+            background-color: #4CAF50; /* Green on hover */
+        }
+    </style>   
+</head>
+<body>
+    <h4>Connect to AWS</h4>
+    <p>Here you can select your AWS region and create a new instance.</p>
+
+    <!-- AWS Status -->
+    <p id="status" class="status-text">AWS Status: Not Connected</p>
+
+    <!-- AWS Region Selection -->
+    <div class="section">
+        <h5>Select AWS Region</h5>
+        <select id="region">
+            <option value="us-east-2">US East (Ohio)</option>
+            <option value="us-west-1">US West (N. California)</option>
+            <option value="us-west-2">US West (Oregon)</option>
+            <option value="eu-west-1">EU (Ireland)</option>
+        </select>
+    </div>
+
+    <!-- AWS Key Pair Selection -->
+    <div class="section">
+        <h5>Select Key Pair</h5>
+        <select id="keyPair">
+            <option value="">Waiting...</option>
+        </select>
+    </div>
+
+    <!-- Create Instance Button -->
+    <div class="section">
+        <button type="button" id="createInstance">Create Instance</button>
+    </div>
+
+    <!-- Active Instances Table -->
+    <div class="table-container">
+        <h5>Active Instances</h5>
+        <table id="instancesTable">
+            <thead>
+                <tr>
+                    <th>Select</th> <!-- Moved to the left -->
+                    <th>Instance ID</th>
+                    <th>Instance Type</th>
+                    <th>Status</th>
+                    <th>Group</th>
+                    <th>Shutdown Schedule</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Table rows will be added here -->
+                <tr id="initialRow">
+                    <td colspan="6" style="text-align:center; color: gray;">Waiting for connection...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Action Buttons Below the Table -->
+    <div class="action-buttons">
+        <button id="createGroup">Create New Group</button>
+        <button id="addToGroup">Add to Group</button>
+        <button id="removeFromGroup">Remove from Group</button>
+        <button id="shutdownInstance">Shutdown Instance</button>
+    </div>
+
+</body>
+</html>

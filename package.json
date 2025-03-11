@@ -213,6 +213,8 @@
     "webpack-cli": "^4.10.0"
   },
   "dependencies": {
-    "aws-sdk": "^2.1692.0"
+    "amazon-cognito-identity-js": "^6.3.12",
+    "aws-sdk": "^2.1692.0",
+    "crypto": "^1.0.1"
   }
 }

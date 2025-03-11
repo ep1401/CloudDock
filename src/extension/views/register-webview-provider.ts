@@ -2,10 +2,23 @@ import { CancellationToken, ExtensionContext, Uri, WebviewView, WebviewViewProvi
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from "crypto";
+import { CognitoUserPool, CognitoUser, AuthenticationDetails } from "amazon-cognito-identity-js";
+
+const CLIENT_ID = "4ca0areiglk3gubkmud0ao9tbm";  
+const CLIENT_SECRET = "14bgmmteji9jco7dpdiu9u6qc4si8ntrkkt606ik2e5hc8pj2j82"; 
+const IDENTITY_POOL_ID = "us-east-2:7e07eb40-6162-457f-8291-39eba80d698d"; 
+const USER_POOL_ID = "us-east-2_eoQAVDbqp";
 
 export function registerWebViewProvider(context: ExtensionContext) {
     const provider = new SidebarWebViewProvider(context.extensionUri, context);
     context.subscriptions.push(window.registerWebviewViewProvider('infinite-poc-sidebar-panel', provider));
+}
+
+function generateSecretHash(username: string, clientId: string, clientSecret: string) {
+    return crypto.createHmac("sha256", clientSecret)
+        .update(username + clientId)
+        .digest("base64");
 }
 
 export class SidebarWebViewProvider implements WebviewViewProvider {
@@ -50,32 +63,81 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
     }
 
     private async authenticateUser() {
-        const accessKey = await this.promptForInput("AWS Authentication", "Enter AWS Access Key ID");
-        if (!accessKey) return;
+        AWS.config.update({ region: "us-east-2" }); // ✅ Ensure AWS SDK region is set
     
-        const secretKey = await this.promptForInput("AWS Authentication", "Enter AWS Secret Access Key");
-        if (!secretKey) return;
+        const username = await this.promptForInput("AWS Authentication", "Enter your username");
+        if (!username) return;
     
-        this.extensionContext.globalState.update("awsAccessKey", accessKey);
-        this.extensionContext.globalState.update("awsSecretKey", secretKey);
+        const password = await this.promptForInput("AWS Authentication", "Enter your password");
+        if (!password) return;
     
-        AWS.config.update({
-            accessKeyId: accessKey,
-            secretAccessKey: secretKey,
-            region: this.selectedRegion
+        const secretHash = generateSecretHash(username, CLIENT_ID, CLIENT_SECRET);
+    
+        const cognito = new AWS.CognitoIdentityServiceProvider();
+    
+        const params = {
+            AuthFlow: "USER_PASSWORD_AUTH", // ✅ Ensure this is enabled in Cognito
+            ClientId: CLIENT_ID,
+            AuthParameters: {
+                USERNAME: username,
+                PASSWORD: password,
+                SECRET_HASH: secretHash
+            }
+        };
+    
+        try {
+            const authResponse = await cognito.initiateAuth(params).promise();
+            
+            const idToken = authResponse.AuthenticationResult?.IdToken;
+            const accessToken = authResponse.AuthenticationResult?.AccessToken;
+    
+            if (!idToken || !accessToken) {
+                throw new Error("Authentication failed: No tokens received.");
+            }
+    
+            console.log("✅ Cognito Authentication Successful!");
+            console.log("🔹 ID Token:", idToken);
+            console.log("🔹 Access Token:", accessToken);
+    
+            // Store tokens in global state
+            this.extensionContext.globalState.update("cognitoIdToken", idToken);
+            this.extensionContext.globalState.update("cognitoAccessToken", accessToken);
+    
+            // ✅ Exchange Token for AWS Temporary Credentials
+            await this.exchangeTokenForAWSCredentials(idToken);
+
+            await this.fetchAWSKeyPairs();
+
+            // 🔹 Fetch all EC2 instances after authentication
+            await this.fetchAllEC2Instances();
+    
+            this.isConnected = true;
+            window.showInformationMessage("Successfully connected to AWS!");
+            this.view?.webview.postMessage({ type: "awsConnected" });
+        } catch (error) {
+            console.error("❌ Cognito Authentication Failed:", error);
+            window.showErrorMessage("Authentication failed: " + error);
+        }
+    }    
+
+    private async exchangeTokenForAWSCredentials(idToken: string) {
+        const identityPoolId = "us-east-2:7e07eb40-6162-457f-8291-39eba80d698d"; 
+    
+        AWS.config.region = "us-east-2";  // ✅ Set your region
+    
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: identityPoolId,
+            Logins: {
+                [`cognito-idp.us-east-2.amazonaws.com/us-east-2_eoQAVDbqp`]: idToken
+            }
         });
     
-        this.isConnected = true;
-        window.showInformationMessage("Successfully connected to AWS!");
-    
-        // 🔹 Fetch AWS Key Pairs immediately after authentication
-        await this.fetchAWSKeyPairs();
-
-        // 🔹 Fetch all EC2 instances after authentication
-        await this.fetchAllEC2Instances();
-    
-        // 🔹 Notify the UI that AWS is connected
-        this.view?.webview.postMessage({ type: "awsConnected" });
+        try {
+            await (AWS.config.credentials as AWS.CognitoIdentityCredentials).getPromise();
+            console.log("✅ AWS Temporary Credentials Acquired:", AWS.config.credentials);
+        } catch (error) {
+            console.error("❌ Error exchanging token for AWS credentials:", error);
+        }
     }
     
 

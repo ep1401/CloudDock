@@ -6,24 +6,32 @@ import { NetworkManagementClient } from "@azure/arm-network";
 import { SubscriptionClient } from "@azure/arm-subscriptions";
 
 export class AzureManager {
-    private userSessions: Map<string, { azureCredential: DefaultAzureCredential; subscriptionIds: string[] }> = new Map();
+    // ✅ Store both subscriptionId and displayName
+    private userSessions: Map<string, { 
+        azureCredential: DefaultAzureCredential; 
+        subscriptions: { subscriptionId: string; displayName: string }[] 
+    }> = new Map();
 
     getUserSession(userAccountId: string) {
         return this.userSessions.get(userAccountId);
     }
 
-    updateUserSession(userAccountId: string, session: { azureCredential: DefaultAzureCredential; subscriptionIds: string[] }) {
+    updateUserSession(
+        userAccountId: string, 
+        session: { 
+            azureCredential: DefaultAzureCredential; 
+            subscriptions: { subscriptionId: string; displayName: string }[] 
+        }
+    ) {
         this.userSessions.set(userAccountId, session);
     }
 
     /**
      * Handles authentication for Azure users.
-     * @param userId Unique ID for Azure session.
-     * @param credentials User authentication details.
      */
     async authenticate() {
         try {
-            vscode.window.showInformationMessage("🔑 Logging you in to Azure...");
+            vscode.window.showInformationMessage("🔑 Connecting to Azure...");
 
             // Request Microsoft authentication session
             const session = await vscode.authentication.getSession(
@@ -44,32 +52,35 @@ export class AzureManager {
             // Initialize Azure credentials using the VS Code authentication session
             const azureCredential = new DefaultAzureCredential();
 
-            // Fetch all subscription IDs using Azure SDK
+            // Fetch all subscription IDs and names using Azure SDK
             const subscriptionClient = new SubscriptionClient(azureCredential);
-            const subscriptions = await subscriptionClient.subscriptions.list();
-            const subscriptionIds: string[] = [];
+            const subscriptionsList = await subscriptionClient.subscriptions.list();
+            const subscriptions: { subscriptionId: string; displayName: string }[] = [];
 
-            for await (const subscription of subscriptions) {
-                if (subscription.subscriptionId) {
-                    subscriptionIds.push(subscription.subscriptionId);
+            for await (const subscription of subscriptionsList) {
+                if (subscription.subscriptionId && subscription.displayName) {
+                    subscriptions.push({
+                        subscriptionId: subscription.subscriptionId,
+                        displayName: subscription.displayName
+                    });
                 }
             }
 
-            if (subscriptionIds.length === 0) {
+            if (subscriptions.length === 0) {
                 throw new Error("No active Azure subscriptions found.");
             }
 
-            console.log(`🔹 Retrieved Azure Subscription IDs:`, subscriptionIds);
+            console.log(`🔹 Retrieved Azure Subscriptions:`, subscriptions);
 
-            // Store session details, now with all subscription IDs
-            this.userSessions.set(session.account.id, { azureCredential, subscriptionIds });
+            // Store session details with both ID and Display Name
+            this.userSessions.set(session.account.id, { azureCredential, subscriptions });
 
             vscode.window.showInformationMessage(`✅ Logged in as ${session.account.label}`);
 
-            // Return authentication details
+            // Return authentication details with subscriptions list
             return {
                 userAccountId: session.account.id, // Unique Azure user ID
-                subscriptionIds
+                subscriptions
             };
         } catch (error) {
             console.error("❌ Azure Authentication failed:", error);

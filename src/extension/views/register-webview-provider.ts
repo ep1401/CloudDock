@@ -71,7 +71,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { keyPairs } = result;
                                             this.postMessage(webviewId, { type: "updateKeyPairs", keyPairs, userId });
                                         }
-                                     }
+                                     } else if (provider === "azure") {
+                                        if ("subscriptions" in result && Array.isArray(result.subscriptions)) {
+                                            console.log("🔑 Sending subscriptions to UI:", result.subscriptions);
+                                            const { subscriptions } = result;
+                                            this.postMessage(webviewId, { type: "updateSubscriptions", subscriptions, userId });
+                                        }
+                                    }
                                 }
                             } else {
                                 console.error(`❌ Unexpected return value from cloudManager.connect:`, result);
@@ -309,6 +315,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "azureConnected") {
                             document.getElementById("azureStatus").textContent = "Azure Status: Connected";
                             document.getElementById("azureStatus").className = "status-text connected";
+                            document.getElementById("status-azure").textContent = "Azure Status: Connected";
+                            document.getElementById("status-azure").className = "status-text connected";
                         }
 
                         if (message.type === "updateKeyPairs") {
@@ -356,6 +364,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 \`;
                                 tableBody.appendChild(row);
                             });
+                        }
+                        if (message.type === "updateSubscriptions") {
+                            console.log("✅ Received subscriptions:", message.subscriptions);
+                            updateSubscriptionDropdown(message.subscriptions);
                         }    
                     });
 
@@ -400,6 +412,31 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         vscode.postMessage({ type: "stopInstance" });
                     });
                 });
+
+                function updateSubscriptionDropdown(subscriptions) {
+                    const subscriptionDropdown = document.getElementById("subscription");
+
+                    // Clear existing options
+                    subscriptionDropdown.innerHTML = "";
+
+                    if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+                        const noSubsOption = document.createElement("option");
+                        noSubsOption.value = "";
+                        noSubsOption.textContent = "No active subscriptions found";
+                        subscriptionDropdown.appendChild(noSubsOption);
+                        return;
+                    }
+
+                    // Populate the dropdown with subscription options
+                    subscriptions.forEach(sub => {
+                        if (sub.subscriptionId && sub.displayName) {
+                            const option = document.createElement("option");
+                            option.value = sub.subscriptionId;
+                            option.textContent = sub.displayName;
+                            subscriptionDropdown.appendChild(option);
+                        }
+                    });
+                }
             </script>
        </head>
         <body>

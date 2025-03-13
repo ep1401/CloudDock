@@ -2,31 +2,133 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Azure Configuration</title>
+    <title>Azure VM Setup</title>
+    <style>
+        .status-text {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #333;
+            color: white;
+        }
+
+        select, button, textarea {
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .section h5 {
+            margin-bottom: 10px;
+        }
+
+        .action-buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .action-buttons button {
+            width: auto;
+            margin: 5px;
+            padding: 5px 15px;
+            font-size: 12px;
+        }
+
+        .action-buttons button:hover {
+            background-color: #4CAF50;
+        }
+    </style>   
 </head>
 <body>
-    <h4>Azure Instances</h4>
-    <p>Configure your Azure instances here.</p>
-    <button id="listAzureInstancesBtn">List Azure Instances</button>
+    <h4>Connect to Azure</h4>
+    <p>Here you can select your Azure subscription and create a new virtual machine.</p>
 
-    <div id="azureInstancesList"></div>
+    <p id="status-azure" class="status-text">Azure Status: Not Connected</p>
 
-    <script>
-        document.getElementById("listAzureInstancesBtn").addEventListener("click", function() {
-            // Send message to extension to fetch Azure instances
-            const vscode = acquireVsCodeApi();
-            vscode.postMessage({ type: "listAzureInstances" });
-        });
+    <div class="section">
+        <h5>Select Azure Subscription</h5>
+        <select id="subscription">
+            <option value="">Waiting...</option>
+        </select>
+    </div>
 
-        // Receive message from extension
-        window.addEventListener("message", event => {
-            const message = event.data;
-            if (message.type === "updateAzureInstances") {
-                const instances = message.instances;
-                const azureInstancesList = document.getElementById("azureInstancesList");
-                azureInstancesList.innerHTML = instances.map(instance => `<p>${instance}</p>`).join('');
-            }
-        });
-    </script>
+    <div class="section">
+        <h5>Select Resource Group</h5>
+        <select id="resourceGroup">
+            <option value="">Waiting...</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <h5>Select Azure Region</h5>
+        <select id="region">
+            <option value="eastus">East US</option>
+            <option value="westus">West US</option>
+            <option value="westeurope">West Europe</option>
+            <option value="southeastasia">Southeast Asia</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <h5>Provide SSH Public Key</h5>
+        <textarea id="sshKey" placeholder="Paste your SSH public key here..."></textarea>
+    </div>
+
+    <div class="section">
+        <button type="button" id="createVM">Create Virtual Machine</button>
+    </div>
+
+    <div class="table-container">
+        <h5>Active Virtual Machines</h5>
+        <table id="vmsTable">
+            <thead>
+                <tr>
+                    <th>Select</th>
+                    <th>VM ID</th>
+                    <th>VM Name</th>
+                    <th>Status</th>
+                    <th>Resource Group</th>
+                    <th>Shutdown Schedule</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="initialRow">
+                    <td colspan="6" style="text-align:center; color: gray;">Waiting for connection...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="action-buttons">
+        <button id="createGroup">Create New Resource Group</button>
+        <button id="addToGroup">Add to Group</button>
+        <button id="removeFromGroup">Remove from Group</button>
+        <button id="shutdownVM">Shutdown VM</button>
+    </div>
 </body>
 </html>

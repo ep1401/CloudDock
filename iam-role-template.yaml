@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  ExternalEC2AccessRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "AllowExternalEC2Management"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              AWS: "arn:aws:iam::600627322783:user/MulticloudDevTestUser"
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+
+Outputs:
+  RoleARN:
+    Value: !GetAtt ExternalEC2AccessRole.Arn
+    Description: "IAM Role ARN for External EC2 Management"

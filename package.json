@@ -200,6 +200,8 @@
     "@types/glob": "^8.0.0",
     "@types/mocha": "^10.0.0",
     "@types/node": "16.x",
+    "@types/pg": "^8.11.11",
+    "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.72.0",
     "@typescript-eslint/eslint-plugin": "^5.38.1",
     "@typescript-eslint/parser": "^5.38.1",
@@ -213,8 +215,14 @@
     "webpack-cli": "^4.10.0"
   },
   "dependencies": {
+    "@azure/arm-compute": "^22.3.0",
+    "@azure/arm-network": "^33.5.0",
+    "@azure/arm-resources": "^6.0.0",
+    "@azure/identity": "^4.8.0",
     "amazon-cognito-identity-js": "^6.3.12",
     "aws-sdk": "^2.1692.0",
-    "crypto": "^1.0.1"
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "pg": "^8.14.0"
   }
 }

@@ -1,0 +1,26 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "principalId": {
+        "type": "string",
+        "defaultValue": "5d0736f5-1af2-4568-aada-3b6e4f862af5",
+        "metadata": {
+          "description": "The object ID of the service principal (your VS Code extension) to which the Contributor role will be assigned."
+        }
+      }
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Authorization/roleAssignments",
+        "apiVersion": "2022-04-01",
+        "name": "[guid(subscription().id, parameters('principalId'), 'contributor-role')]",
+        "properties": {
+          "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+          "principalId": "[parameters('principalId')]",
+          "principalType": "ServicePrincipal"
+        }
+      }
+    ]
+  }
+  

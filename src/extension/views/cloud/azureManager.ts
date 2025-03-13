@@ -152,10 +152,147 @@ export class AzureManager {
      * @param userId Unique ID for Azure session.
      * @param params Instance parameters (resourceGroupName, vmName, groupId).
      */
-    async createInstance(userId: string, params: { groupId?: string }) {
-        
-    }    
+    async createInstance(params: {
+        subscriptionId: string;
+        resourceGroup: string;
+        region: string;
+        userId: string;
+        sshKey: string;
+    }): Promise<string> {
+        // Retrieve the authenticated session for the provided userId.
+        const userSession = this.userSessions.get(params.userId);
+        if (!userSession || !userSession.azureCredential) {
+            throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
+        }
+        const azureCredential = userSession.azureCredential;
+    
+        // Initialize management clients.
+        const computeClient = new ComputeManagementClient(azureCredential, params.subscriptionId);
+        const networkClient = new NetworkManagementClient(azureCredential, params.subscriptionId);
+    
+        // Generate unique names for resources.
+        const timestamp = Date.now();
+        const uniqueSuffix = timestamp.toString();
+        const vmName = `vm-${uniqueSuffix}`;
+        const nicName = `nic-${uniqueSuffix}`;
+        const vnetName = `vnet-${uniqueSuffix}`;
+        const subnetName = `subnet-${uniqueSuffix}`;
+        const nsgName = `nsg-${uniqueSuffix}`;
+    
+        // Create a Virtual Network with a Subnet.
+        const vnetParams = {
+            location: params.region,
+            addressSpace: { addressPrefixes: ["10.0.0.0/16"] },
+            subnets: [
+                { name: subnetName, addressPrefix: "10.0.0.0/24" }
+            ]
+        };
+        const vnetResult = await networkClient.virtualNetworks.beginCreateOrUpdateAndWait(
+            params.resourceGroup,
+            vnetName,
+            vnetParams
+        );
+        const subnet = vnetResult.subnets && vnetResult.subnets[0];
+        if (!subnet || !subnet.id) {
+            throw new Error("Failed to retrieve subnet information from the virtual network.");
+        }
+    
+        // Create a Network Security Group with an SSH rule.
+        const nsgParams = {
+            location: params.region,
+            securityRules: [
+                {
+                    name: "allow-ssh",
+                    protocol: "Tcp",
+                    sourcePortRange: "*",
+                    destinationPortRange: "22",
+                    sourceAddressPrefix: "*",
+                    destinationAddressPrefix: "*",
+                    access: "Allow",
+                    priority: 1000,
+                    direction: "Inbound"
+                }
+            ]
+        };
+        const nsgResult = await networkClient.networkSecurityGroups.beginCreateOrUpdateAndWait(
+            params.resourceGroup,
+            nsgName,
+            nsgParams
+        );
+    
+        // Create a Network Interface that uses the subnet and NSG, with a dynamically allocated private IP.
+        const nicParams = {
+            location: params.region,
+            ipConfigurations: [
+                {
+                    name: "ipconfig1",
+                    subnet: { id: subnet.id },
+                    privateIPAllocationMethod: "Dynamic"
+                }
+            ],
+            networkSecurityGroup: { id: nsgResult.id }
+        };
+        const nicResult = await networkClient.networkInterfaces.beginCreateOrUpdateAndWait(
+            params.resourceGroup,
+            nicName,
+            nicParams
+        );
+    
+        // Create the Virtual Machine with the SSH key for secure access.
+        const vmParams = {
+            location: params.region,
+            hardwareProfile: {
+                vmSize: "Standard_B1s"
+            },
+            osProfile: {
+                computerName: vmName,
+                adminUsername: "azureuser",
+                linuxConfiguration: {
+                    disablePasswordAuthentication: true,
+                    ssh: {
+                        publicKeys: [
+                            {
+                                path: `/home/azureuser/.ssh/authorized_keys`,
+                                keyData: params.sshKey
+                            }
+                        ]
+                    }
+                }
+            },
+            networkProfile: {
+                networkInterfaces: [
+                    { id: nicResult.id, primary: true }
+                ]
+            },
+            storageProfile: {
+                imageReference: {
+                    publisher: "Canonical",
+                    offer: "UbuntuServer",
+                    sku: "18.04-LTS",
+                    version: "latest"
+                },
+                osDisk: {
+                    createOption: "FromImage"
+                }
+            }
+        };
+    
+        const vmResult = await computeClient.virtualMachines.beginCreateOrUpdateAndWait(
+            params.resourceGroup,
+            vmName,
+            vmParams
+        );
+    
+        if (!vmResult.id) {
+            throw new Error("Failed to create VM: VM ID is undefined.");
+        }
 
+        vscode.window.showInformationMessage(`✅ Azure VM created successfully. VM ID: ${vmResult.id}`);
+        return vmResult.id;
+    }
+    
+    
+      
     /**
      * Stops an Azure virtual machine.
      * @param userId Unique ID for Azure session.

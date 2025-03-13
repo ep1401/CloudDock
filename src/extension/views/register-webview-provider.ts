@@ -80,7 +80,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                         if ("resourceGroups" in result && typeof result.resourceGroups === "object") {
                                             console.log("📂 Sending resource groups to UI:", result.resourceGroups);
                                             const { resourceGroups } = result;
-                                            window.showInformationMessage('Resource Groups: ' + JSON.stringify(resourceGroups));
                                             this.postMessage(webviewId, { type: "updateResourceGroups", resourceGroups, userId });
                                         }
                                     }
@@ -122,57 +121,100 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         break;
                         case "createInstance":
                             console.log(`🔹 Received createInstance request from webview ${webviewId}:`, data);
-                        
+
                             if (!webviewId) {
                                 console.error("❌ Missing webviewId in createInstance request.");
                                 window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
                                 return;
                             }
-                        
+
                             // ✅ Retrieve the correct user ID based on the provider
                             const instanceUserId = userSession[provider]; 
-                        
+
                             if (!instanceUserId) {
                                 console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
                                 window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
                                 return;
                             }
-                        
-                            // ✅ Validate required parameters
-                            if (!payload || !payload.keyPair || !payload.region) {
-                                console.error("❌ Missing parameters for instance creation.");
-                                window.showErrorMessage("Please select a key pair and region before creating an instance.");
-                                return;
-                            }
-                        
-                            console.log(`📤 Creating ${provider.toUpperCase()} Instance for userId: ${instanceUserId} in region: ${payload.region} with key pair: ${payload.keyPair}`);
-                        
-                            try {
-                                // ✅ Call the `cloudManager` function to create an instance with the correct user ID
-                                const instanceId = await this.cloudManager.createInstance(provider, instanceUserId, {
-                                    keyPair: payload.keyPair,
-                                });
-                        
-                                if (!instanceId) {
-                                    console.error("❌ Instance creation failed. No instance ID returned.");
-                                    window.showErrorMessage(`Failed to create ${provider.toUpperCase()} instance. Check logs for details.`);
+
+                            // ✅ Validate required parameters based on provider
+                            if (provider === "aws") {
+                                if (!payload || !payload.keyPair || !payload.region) {
+                                    console.error("❌ Missing parameters for AWS instance creation.");
+                                    window.showErrorMessage("Please select a key pair and region before creating an AWS instance.");
                                     return;
                                 }
-                        
-                                console.log(`✅ Instance created successfully. Instance ID: ${instanceId}`);
-                        
-                                // ✅ Notify the webview about the created instance
-                                this.postMessage(webviewId, {
-                                    type: "instanceCreated",
-                                    instanceId: instanceId,
-                                    userId: instanceUserId,  // ✅ Send correct AWS or Azure user ID
-                                });
-                        
-                            } catch (error) {
-                                console.error(`❌ Error creating instance:`, error);
-                                window.showErrorMessage(`Error creating instance: ${error}`);
+                                console.log(`📤 Creating AWS Instance for userId: ${instanceUserId} in region: ${payload.region} with key pair: ${payload.keyPair}`);
+
+                                try {
+                                    // ✅ Call `createInstance` for AWS
+                                    window.showInformationMessage('Creating AWS Instance');
+                                    const instanceId = await this.cloudManager.createInstance(provider, instanceUserId, {
+                                        keyPair: payload.keyPair,
+                                        region: payload.region
+                                    });
+
+                                    if (!instanceId) {
+                                        console.error("❌ AWS Instance creation failed. No instance ID returned.");
+                                        window.showErrorMessage("Failed to create AWS instance. Check logs for details.");
+                                        return;
+                                    }
+
+                                    console.log(`✅ AWS Instance created successfully. Instance ID: ${instanceId}`);
+
+                                    // ✅ Notify the webview about the created instance
+                                    this.postMessage(webviewId, {
+                                        type: "instanceCreated",
+                                        instanceId: instanceId,
+                                        userId: instanceUserId,  
+                                    });
+
+                                } catch (error) {
+                                    console.error(`❌ Error creating AWS instance:`, error);
+                                    window.showErrorMessage(`Error creating AWS instance: ${error}`);
+                                }
+
+                            } else if (provider === "azure") {
+                                if (!payload || !payload.subscriptionId || !payload.resourceGroup || !payload.region || !payload.sshKey) {
+                                    console.error("❌ Missing parameters for Azure VM creation.");
+                                    window.showErrorMessage("Please select a subscription, resource group, region, and provide an SSH key before creating an Azure VM.");
+                                    return;
+                                }
+
+                                console.log(`📤 Creating Azure VM for userId: ${instanceUserId} in region: ${payload.region}, Subscription: ${payload.subscriptionId}, Resource Group: ${payload.resourceGroup}`);
+
+                                try {
+                                    // ✅ Call `createInstance` for Azure
+                                    window.showInformationMessage('Creating Azure Instance');
+                                    const vmId = await this.cloudManager.createInstance(provider, instanceUserId, {
+                                        subscriptionId: payload.subscriptionId,
+                                        resourceGroup: payload.resourceGroup,
+                                        region: payload.region,
+                                        sshKey: payload.sshKey
+                                    });
+
+                                    if (!vmId) {
+                                        console.error("❌ Azure VM creation failed. No VM ID returned.");
+                                        window.showErrorMessage("Failed to create Azure VM. Check logs for details.");
+                                        return;
+                                    }
+
+                                    console.log(`✅ Azure VM created successfully. VM ID: ${vmId}`);
+
+                                    // ✅ Notify the webview about the created instance
+                                    this.postMessage(webviewId, {
+                                        type: "instanceCreated",
+                                        instanceId: vmId,
+                                        userId: instanceUserId,  
+                                    });
+
+                                } catch (error) {
+                                    console.error(`❌ Error creating Azure VM:`, error);
+                                    window.showErrorMessage(`Error creating Azure VM: ${error}`);
+                                }
                             }
-                            break;                        
+                            break;
+                   
                     case "getResourceGroups":
                         try {
                             console.log("📤 Received request to fetch resource groups for Azure.");
@@ -448,8 +490,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                     });
 
-                    document.getElementById("region").addEventListener("change", function () {
-                        const region = document.getElementById("region").value;
+                    document.getElementById("region-aws").addEventListener("change", function () {
+                        const region = document.getElementById("region-aws").value;
                         console.log("🔹 Region changed to:", region);
                 
                         // Show "Fetching..." while waiting for the response
@@ -466,7 +508,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                     document.getElementById("createInstance").addEventListener("click", () => {
                         const keyPair = document.getElementById("keyPair").value;
-                        const region = document.getElementById("region").value;
+                        const region = document.getElementById("region-aws").value;
 
                         if (!keyPair) {
                             alert("Please select a key pair before creating an instance.");
@@ -479,6 +521,46 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             provider: "aws",
                             webviewId, 
                             payload: { region, keyPair }
+                        });
+                    });
+
+                    document.getElementById("createVM").addEventListener("click", () => {
+                        const subscriptionId = document.getElementById("subscription").value;
+                        const resourceGroup = document.getElementById("resourceGroup").value;
+                        const region = document.getElementById("region-azure").value;
+                        const sshKey = document.getElementById("sshKey").value.trim();
+
+                        if (!subscriptionId) {
+                            alert("Please select an Azure subscription.");
+                            return;
+                        }
+
+                        if (!resourceGroup) {
+                            alert("Please select a resource group.");
+                            return;
+                        }
+
+                        if (!region) {
+                            alert("Please select a region.");
+                            return;
+                        }
+
+                        if (!sshKey) {
+                            alert("Please provide an SSH public key.");
+                            return;
+                        }
+
+                        // Send message to extension to create an Azure VM
+                        vscode.postMessage({
+                            type: "createInstance",
+                            provider: "azure",
+                            webviewId,
+                            payload: {
+                                subscriptionId,
+                                resourceGroup,
+                                region,
+                                sshKey
+                            }
                         });
                     });
                     

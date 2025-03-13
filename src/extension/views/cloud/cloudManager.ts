@@ -76,14 +76,41 @@ export class CloudManager {
      * @param userId Unique ID for AWS or Azure session.
      * @param params Instance parameters.
      */
-    async createInstance(provider: "aws" | "azure", userId: string, params: { keyPair?: string }) {
+    async createInstance(provider: "aws" | "azure", userId: string, params: { 
+        keyPair?: string, 
+        subscriptionId?: string, 
+        resourceGroup?: string, 
+        region?: string, 
+        sshKey?: string 
+    }) {
         if (provider === "aws") {
             return await this.awsManager.createInstance(userId, params);
         } else if (provider === "azure") {
-            return "not done yet";
+            if (!params.subscriptionId || !params.resourceGroup || !params.region || !params.sshKey) {
+                throw new Error("❌ Missing required parameters for Azure VM creation.");
+            }
+    
+            console.log(`📤 Creating Azure VM for userId: ${userId} in region: ${params.region}, Subscription: ${params.subscriptionId}, Resource Group: ${params.resourceGroup}`);
+    
+            try {
+                const vmId = await this.azureManager.createInstance({
+                    subscriptionId: params.subscriptionId,
+                    resourceGroup: params.resourceGroup,
+                    region: params.region,
+                    userId,
+                    sshKey: params.sshKey
+                });
+    
+                console.log(`✅ Azure VM created successfully. VM ID: ${vmId}`);
+                return vmId;
+    
+            } catch (error) {
+                console.error("❌ Error creating Azure VM:", error);
+                throw new Error(`Azure VM creation failed: ${error}`);
+            }
         }
         throw new Error("Invalid provider specified.");
-    }
+    }    
 
     /**
      * Stops an instance on AWS or Azure.

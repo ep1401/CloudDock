@@ -1,11 +1,20 @@
-import { window } from "vscode";
+import * as vscode from "vscode";
 import { DefaultAzureCredential } from "@azure/identity";
 import { ComputeManagementClient } from "@azure/arm-compute";
 import { ResourceManagementClient } from "@azure/arm-resources";
 import { NetworkManagementClient } from "@azure/arm-network";
+import { SubscriptionClient } from "@azure/arm-subscriptions";
 
 export class AzureManager {
-    private userSessions: Map<string, { azureCredential: DefaultAzureCredential; subscriptionId: string }> = new Map();
+    private userSessions: Map<string, { azureCredential: DefaultAzureCredential; subscriptionIds: string[] }> = new Map();
+
+    getUserSession(userAccountId: string) {
+        return this.userSessions.get(userAccountId);
+    }
+
+    updateUserSession(userAccountId: string, session: { azureCredential: DefaultAzureCredential; subscriptionIds: string[] }) {
+        this.userSessions.set(userAccountId, session);
+    }
 
     /**
      * Handles authentication for Azure users.
@@ -13,7 +22,60 @@ export class AzureManager {
      * @param credentials User authentication details.
      */
     async authenticate() {
-        return "hello";
+        try {
+            vscode.window.showInformationMessage("🔑 Logging you in to Azure...");
+
+            // Request Microsoft authentication session
+            const session = await vscode.authentication.getSession(
+                "microsoft",
+                ["https://management.azure.com/user_impersonation"],
+                { createIfNone: true }
+            );
+
+            if (!session) {
+                throw new Error("Azure authentication session not found.");
+            }
+
+            console.log("✅ Azure authentication successful:", session);
+
+            // Extract access token
+            const accessToken = session.accessToken;
+
+            // Initialize Azure credentials using the VS Code authentication session
+            const azureCredential = new DefaultAzureCredential();
+
+            // Fetch all subscription IDs using Azure SDK
+            const subscriptionClient = new SubscriptionClient(azureCredential);
+            const subscriptions = await subscriptionClient.subscriptions.list();
+            const subscriptionIds: string[] = [];
+
+            for await (const subscription of subscriptions) {
+                if (subscription.subscriptionId) {
+                    subscriptionIds.push(subscription.subscriptionId);
+                }
+            }
+
+            if (subscriptionIds.length === 0) {
+                throw new Error("No active Azure subscriptions found.");
+            }
+
+            console.log(`🔹 Retrieved Azure Subscription IDs:`, subscriptionIds);
+
+            // Store session details, now with all subscription IDs
+            this.userSessions.set(session.account.id, { azureCredential, subscriptionIds });
+
+            vscode.window.showInformationMessage(`✅ Logged in as ${session.account.label}`);
+
+            // Return authentication details
+            return {
+                userAccountId: session.account.id, // Unique Azure user ID
+                subscriptionIds
+            };
+        } catch (error) {
+            console.error("❌ Azure Authentication failed:", error);
+            vscode.window.showErrorMessage(`Azure login failed: ${error}`);
+            throw error;
+        }
     }
 
     /**
@@ -22,38 +84,7 @@ export class AzureManager {
      * @param params Instance parameters (resourceGroupName, vmName, groupId).
      */
     async createInstance(userId: string, params: { groupId?: string }) {
-        const session = this.userSessions.get(userId);
-        if (!session) {
-            window.showErrorMessage("Please authenticate first.");
-            return;
-        }
-    
-        try {
-            const { subscriptionId, azureCredential } = session;
-            const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
-            const resourceGroupName = `rg-${userId}`;
-            const vmName = `vm-${userId}-${Date.now()}`;
-    
-            // Ensure resource group exists
-            const resourceClient = new ResourceManagementClient(azureCredential, subscriptionId);
-            await resourceClient.resourceGroups.createOrUpdate(resourceGroupName, { location: "eastus" });
-    
-            // Create Virtual Machine
-            await computeClient.virtualMachines.beginCreateOrUpdateAndWait(resourceGroupName, vmName, {
-                location: "eastus",
-                hardwareProfile: { vmSize: "Standard_B1s" },
-                osProfile: { adminUsername: "azureuser", computerName: vmName, linuxConfiguration: { disablePasswordAuthentication: true } },
-                storageProfile: { imageReference: { publisher: "Canonical", offer: "UbuntuServer", sku: "18.04-LTS", version: "latest" } },
-            });
-    
-            // Store instance in DB    
-            window.showInformationMessage(`✅ Azure VM ${vmName} created successfully!`);
-            return { instanceId: vmName, userId, groupId: params.groupId };
-        } catch (error) {
-            console.error("❌ Error creating Azure instance:", error);
-            window.showErrorMessage("Failed to create Azure VM.");
-            return null;
-        }
+        
     }    
 
     /**
@@ -62,20 +93,7 @@ export class AzureManager {
      * @param instanceId The ID of the VM to be stopped.
      */
     async stopInstance(userId: string, instanceId: string) {
-        const session = this.userSessions.get(userId);
-        if (!session) {
-            window.showErrorMessage("Please authenticate first.");
-            return;
-        }
-
-        try {
-            const computeClient = new ComputeManagementClient(session.azureCredential, session.subscriptionId);
-            await computeClient.virtualMachines.beginDeallocateAndWait(instanceId.split("/")[4], instanceId.split("/")[8]);
-            window.showInformationMessage(`✅ VM ${instanceId} stopped.`);
-        } catch (error) {
-            console.error("❌ Error stopping Azure VM:", error);
-            window.showErrorMessage("Failed to stop Azure VM.");
-        }
+        
     }
 
     /**

@@ -16,7 +16,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
     private viewInstances: Map<string, WebviewView> = new Map();
 
     // Map webview IDs to user accounts
-    private userSessions: Map<string, string> = new Map(); // Maps webviewId -> userId
+    private userSessions: Map<string, Record<string, string>> = new Map(); // Maps webviewId -> userId
 
     constructor(private readonly _extensionUri: Uri, public extensionContext: ExtensionContext) {}
 
@@ -24,6 +24,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
         // Assign a unique ID to this webview
         const webviewId = uuidv4();
         this.viewInstances.set(webviewId, webviewView);
+
+        this.userSessions.set(webviewId, {});
 
         webviewView.webview.options = { enableScripts: true };
 
@@ -43,7 +45,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
             const { provider, type, payload, webviewId } = data;
-            let userId = this.userSessions.get(webviewId); // Retrieve userId from sessions map
+            const userSession = this.userSessions.get(webviewId) || {}; 
+            let userId = userSession[provider];
 
             try {
                 switch (type) {
@@ -53,17 +56,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (typeof result === "string") {
                                 userId = result;
-                            } else if (result && typeof result === "object" && "userAccountId" in result && "keyPairs" in result) {
+                            } else if (result && typeof result === "object" && "userAccountId" in result ) {
                                 userId = result.userAccountId;
-                                const { keyPairs } = result;
 
                                 if (typeof userId === "string" && userId.trim().length > 0) {
                                     // ✅ Store userId for this webview
-                                    this.userSessions.set(webviewId, userId);
+                                    userSession[provider] = userId;
+                                    this.userSessions.set(webviewId, userSession);
 
                                     // ✅ Send messages to update UI
                                     this.postMessage(webviewId, { type: `${provider}Connected`, userId });
-                                    this.postMessage(webviewId, { type: "updateKeyPairs", keyPairs, userId });
+                                    if (provider == "aws") {
+                                        if ('keyPairs' in result) {
+                                            const { keyPairs } = result;
+                                            this.postMessage(webviewId, { type: "updateKeyPairs", keyPairs, userId });
+                                        }
+                                     }
                                 }
                             } else {
                                 console.error(`❌ Unexpected return value from cloudManager.connect:`, result);
@@ -270,6 +278,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
                     });
 
+                    document.getElementById("connectAzure").addEventListener("click", function() {
+                        const azureStatusElement = document.getElementById("azureStatus");
+                        azureStatusElement.textContent = "Azure Status: Connecting...";
+                        azureStatusElement.className = "status-text connecting";
+
+                        vscode.postMessage({
+                            type: "connect",
+                            provider: "azure",
+                            webviewId
+                        });
+                    });
+
                     window.addEventListener("message", event => {
                         console.log("🔹 Received message from extension:", event.data);
                         const message = event.data;
@@ -282,8 +302,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "awsConnected") {
                             document.getElementById("awsStatus").textContent = "AWS Status: Connected";
                             document.getElementById("awsStatus").className = "status-text connected";
-                            document.getElementById("status").textContent = "AWS Status: Connected";
-                            document.getElementById("status").className = "status-text connected";
+                            document.getElementById("status-aws").textContent = "AWS Status: Connected";
+                            document.getElementById("status-aws").className = "status-text connected";
+                        }
+
+                        if (message.type === "azureConnected") {
+                            document.getElementById("azureStatus").textContent = "Azure Status: Connected";
+                            document.getElementById("azureStatus").className = "status-text connected";
                         }
 
                         if (message.type === "updateKeyPairs") {

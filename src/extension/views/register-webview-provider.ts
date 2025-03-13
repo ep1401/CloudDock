@@ -71,6 +71,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { keyPairs } = result;
                                             this.postMessage(webviewId, { type: "updateKeyPairs", keyPairs, userId });
                                         }
+                                        if ('ec2instances' in result) {
+                                            const { ec2instances } = result;
+                                            this.postMessage(webviewId, { type: "updateInstances", instances: ec2instances, userId });
+                                        }
                                      } else if (provider === "azure") {
                                         if ("subscriptions" in result && Array.isArray(result.subscriptions)) {
                                             console.log("🔑 Sending subscriptions to UI:", result.subscriptions);

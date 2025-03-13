@@ -522,7 +522,7 @@ export class AWSManager {
     * Retrieves all EC2 instances associated with the user.
     * @param userId Unique user identifier.
     */
-   private async fetchAllEC2InstancesAcrossRegions(userId: string) {
+   async fetchAllEC2InstancesAcrossRegions(userId: string) {
         const userSession = this.userSessions.get(userId);
 
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {

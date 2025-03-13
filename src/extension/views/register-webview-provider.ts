@@ -77,6 +77,12 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { subscriptions } = result;
                                             this.postMessage(webviewId, { type: "updateSubscriptions", subscriptions, userId });
                                         }
+                                        if ("resourceGroups" in result && typeof result.resourceGroups === "object") {
+                                            console.log("📂 Sending resource groups to UI:", result.resourceGroups);
+                                            const { resourceGroups } = result;
+                                            window.showInformationMessage('Resource Groups: ' + JSON.stringify(resourceGroups));
+                                            this.postMessage(webviewId, { type: "updateResourceGroups", resourceGroups, userId });
+                                        }
                                     }
                                 }
                             } else {
@@ -114,56 +120,104 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error changing region: ${error}`);
                         }
                         break;
-                    case "createInstance":
-                        console.log(`🔹 Received createInstance request from webview ${webviewId}:`, data);
-
-                        if (!webviewId) {
-                            console.error("❌ Missing webviewId in createInstance request.");
-                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
-                            return;
-                        }
-
-                        if (!userId) {
-                            console.error("❌ No authenticated user found. Please authenticate first.");
-                            window.showErrorMessage("Please authenticate first!");
-                            return;
-                        }
-
-                        // ✅ Validate required parameters
-                        if (!payload || !payload.keyPair || !payload.region) {
-                            console.error("❌ Missing parameters for instance creation.");
-                            window.showErrorMessage("Please select a key pair and region before creating an instance.");
-                            return;
-                        }
-
-                        console.log(`📤 Creating AWS Instance for userId: ${userId} in region: ${payload.region} with key pair: ${payload.keyPair}`);
-
+                        case "createInstance":
+                            console.log(`🔹 Received createInstance request from webview ${webviewId}:`, data);
+                        
+                            if (!webviewId) {
+                                console.error("❌ Missing webviewId in createInstance request.");
+                                window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                                return;
+                            }
+                        
+                            // ✅ Retrieve the correct user ID based on the provider
+                            const instanceUserId = userSession[provider]; 
+                        
+                            if (!instanceUserId) {
+                                console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                                window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                                return;
+                            }
+                        
+                            // ✅ Validate required parameters
+                            if (!payload || !payload.keyPair || !payload.region) {
+                                console.error("❌ Missing parameters for instance creation.");
+                                window.showErrorMessage("Please select a key pair and region before creating an instance.");
+                                return;
+                            }
+                        
+                            console.log(`📤 Creating ${provider.toUpperCase()} Instance for userId: ${instanceUserId} in region: ${payload.region} with key pair: ${payload.keyPair}`);
+                        
+                            try {
+                                // ✅ Call the `cloudManager` function to create an instance with the correct user ID
+                                const instanceId = await this.cloudManager.createInstance(provider, instanceUserId, {
+                                    keyPair: payload.keyPair,
+                                });
+                        
+                                if (!instanceId) {
+                                    console.error("❌ Instance creation failed. No instance ID returned.");
+                                    window.showErrorMessage(`Failed to create ${provider.toUpperCase()} instance. Check logs for details.`);
+                                    return;
+                                }
+                        
+                                console.log(`✅ Instance created successfully. Instance ID: ${instanceId}`);
+                        
+                                // ✅ Notify the webview about the created instance
+                                this.postMessage(webviewId, {
+                                    type: "instanceCreated",
+                                    instanceId: instanceId,
+                                    userId: instanceUserId,  // ✅ Send correct AWS or Azure user ID
+                                });
+                        
+                            } catch (error) {
+                                console.error(`❌ Error creating instance:`, error);
+                                window.showErrorMessage(`Error creating instance: ${error}`);
+                            }
+                            break;                        
+                    case "getResourceGroups":
                         try {
-                            // ✅ Call the AWSManager function to create an instance
-                            const instanceId = await this.cloudManager.createInstance(provider, userId, {
-                                keyPair: payload.keyPair,
-                            });
+                            console.log("📤 Received request to fetch resource groups for Azure.");
 
-                            if (!instanceId) {
-                                console.error("❌ Instance creation failed. No instance ID returned.");
-                                window.showErrorMessage("Failed to create AWS instance. Check logs for details.");
+                            if (!payload || !payload.subscriptionId) {
+                                console.error("❌ Missing subscriptionId in request.");
+                                window.showErrorMessage("Subscription ID is required to fetch resource groups.");
                                 return;
                             }
 
-                            console.log(`✅ Instance created successfully. Instance ID: ${instanceId}`);
+                            const subscriptionId = payload.subscriptionId;
+                            console.log(`🔹 Fetching resource groups for Subscription ID: ${subscriptionId}`);
 
-                            // ✅ Notify the webview about the created instance
-                            this.postMessage(webviewId, {
-                                type: "instanceCreated",
-                                instanceId: instanceId,
-                                userId: userId,
+                            // ✅ Ensure Azure user ID is retrieved correctly
+                            const azureUserId = userSession["azure"];
+                            if (!azureUserId) {
+                                console.error("❌ No Azure user session found.");
+                                window.showErrorMessage("Please authenticate with Azure first.");
+                                return;
+                            }
+
+                            // ✅ Call the function from `cloudManager` to fetch resource groups
+                            const resourceGroups = await this.cloudManager.getResourceGroupsForSubscription("azure", azureUserId, subscriptionId);
+
+                            if (!resourceGroups || !Array.isArray(resourceGroups)) {
+                                console.warn("⚠️ No resource groups returned.");
+                                window.showErrorMessage("No resource groups found for this subscription.");
+                                return;
+                            }
+
+                            console.log(`✅ Retrieved ${resourceGroups.length} resource groups for subscription ${subscriptionId}.`);
+
+                            // ✅ Send resource groups back to the UI
+                            this.postMessage(webviewId, { 
+                                type: "updateResourceGroups", 
+                                resourceGroups: { [subscriptionId]: resourceGroups }, 
+                                userId: azureUserId  // ✅ Send the correct Azure user ID
                             });
 
                         } catch (error) {
-                            console.error(`❌ Error creating instance:`, error);
-                            window.showErrorMessage(`Error creating instance: ${error}`);
+                            console.error(`❌ Error fetching resource groups:`, error);
+                            window.showErrorMessage(`Error fetching resource groups: ${error}`);
                         }
                         break;
+
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -296,6 +350,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
                     });
 
+                    document.getElementById("subscription").addEventListener("change", function () {
+                        const selectedSubscriptionId = document.getElementById("subscription").value;
+                        console.log("🔹 Subscription changed to:", selectedSubscriptionId);
+
+                        if (selectedSubscriptionId) {
+                            // ✅ Request resource groups for the selected subscription
+                            vscode.postMessage({
+                                type: "getResourceGroups",
+                                provider: "azure",
+                                webviewId,
+                                payload: { subscriptionId: selectedSubscriptionId }
+                            });
+
+                            // Show "Fetching..." in dropdown while waiting for response
+                            const resourceGroupDropdown = document.getElementById("resourceGroup");
+                            resourceGroupDropdown.innerHTML = "<option value=''>Fetching resource groups...</option>";
+                        }
+                    });
+
                     window.addEventListener("message", event => {
                         console.log("🔹 Received message from extension:", event.data);
                         const message = event.data;
@@ -369,6 +442,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("✅ Received subscriptions:", message.subscriptions);
                             updateSubscriptionDropdown(message.subscriptions);
                         }    
+                        if (message.type === "updateResourceGroups") {
+                            console.log("📂 Received resource groups:", message.resourceGroups);
+                            updateResourceGroupDropdown(message.resourceGroups);
+                        }
                     });
 
                     document.getElementById("region").addEventListener("change", function () {
@@ -436,6 +513,52 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             subscriptionDropdown.appendChild(option);
                         }
                     });
+                }
+                function updateResourceGroupDropdown(resourceGroups) {
+                    console.log("📂 Received resourceGroups:", JSON.stringify(resourceGroups, null, 2));
+
+                    const resourceGroupDropdown = document.getElementById("resourceGroup");
+
+                    // Clear existing options
+                    resourceGroupDropdown.innerHTML = "";
+
+                    const selectedSubscriptionId = document.getElementById("subscription").value;
+                    console.log("🔹 Selected Subscription ID:", selectedSubscriptionId);
+
+                    if (!selectedSubscriptionId || !resourceGroups[selectedSubscriptionId]) {
+                        console.warn("⚠️ No resource groups found for Subscription ID");
+                        const noGroupsOption = document.createElement("option");
+                        noGroupsOption.value = "";
+                        noGroupsOption.textContent = "No resource groups available";
+                        resourceGroupDropdown.appendChild(noGroupsOption);
+                        return;
+                    }
+
+                    const groupsForSubscription = resourceGroups[selectedSubscriptionId];
+
+                    if (!Array.isArray(groupsForSubscription) || groupsForSubscription.length === 0) {
+                        console.warn("⚠️ No resource groups found for this subscription.");
+                        const noGroupsOption = document.createElement("option");
+                        noGroupsOption.value = "";
+                        noGroupsOption.textContent = "No resource groups available";
+                        resourceGroupDropdown.appendChild(noGroupsOption);
+                        return;
+                    }
+
+                    console.log("✅ Populating resource groups:", groupsForSubscription);
+
+                    // Populate dropdown with resource groups
+                    groupsForSubscription.forEach(function (rg) {
+                        if (rg && rg.resourceGroupName) {
+                            const option = document.createElement("option");
+                            option.value = rg.resourceGroupName;
+                            option.textContent = rg.resourceGroupName;
+                            resourceGroupDropdown.appendChild(option);
+                        }
+                    });
+
+                    // ✅ Auto-select the first available resource group
+                    resourceGroupDropdown.value = groupsForSubscription[0]?.resourceGroupName || "";
                 }
             </script>
        </head>

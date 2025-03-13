@@ -144,4 +144,8 @@ export class CloudManager {
         console.error(`❌ Invalid provider specified: ${provider}`);
         throw new Error("Invalid provider specified.");
     }    
+
+    async getResourceGroupsForSubscription(provider: "azure", userId: string, subscriptionId: string) {
+        return await this.azureManager.getResourceGroupsForSubscription(provider, userId, subscriptionId);
+    }
 }

@@ -712,5 +712,49 @@ export class AWSManager {
             console.error(`❌ Error terminating instances for user ${userIdAWS}:`, error);
             window.showErrorMessage(`Error terminating instances: ${error}`);
         }
-    }    
+    }  
+    async startInstances(userIdAWS: string, instanceIds: string[]) {
+        console.log(`🚀 Starting AWS instances for user ${userIdAWS}:`, instanceIds);
+    
+        if (!userIdAWS) {
+            console.error("❌ No AWS user ID provided.");
+            throw new Error("AWS user ID is required to start instances.");
+        }
+    
+        if (!instanceIds || instanceIds.length === 0) {
+            console.error("❌ No instance IDs provided.");
+            throw new Error("At least one instance ID is required to start instances.");
+        }
+    
+        // ✅ Retrieve the user session
+        const userSession = this.getUserSession(userIdAWS);
+        if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
+            console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
+            window.showErrorMessage("Please authenticate first!");
+            return;
+        }
+    
+        const region = userSession.selectedRegion;
+        console.log(`📤 Initiating start request for instances in region ${region}:`, instanceIds);
+    
+        // ✅ Initialize EC2 service with correct credentials
+        const ec2 = new AWS.EC2({
+            accessKeyId: userSession.awsConfig.credentials.accessKeyId,
+            secretAccessKey: userSession.awsConfig.credentials.secretAccessKey,
+            sessionToken: userSession.awsConfig.credentials.sessionToken,
+            region: region
+        });
+    
+        try {
+            // ✅ Send start request to AWS
+            const response = await ec2.startInstances({ InstanceIds: instanceIds }).promise();
+    
+            console.log(`✅ Start initiated for instances: ${instanceIds.join(", ")}`, response);
+    
+        } catch (error) {
+            console.error(`❌ Error starting instances for user ${userIdAWS}:`, error);
+            window.showErrorMessage(`Error starting instances: ${error}`);
+        }
+    }
+      
 }

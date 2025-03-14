@@ -374,6 +374,47 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error terminating instances: ${error}`);
                         }
                         break;
+                    case "startInstances":
+                        console.log("📩 Received startInstances message:", data); // Debugging log
+
+                        if (!userSession["aws"]) {
+                            console.error("❌ No authenticated AWS user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with AWS first!");
+                            return;
+                        }
+
+                        const userIdAWSstart = userSession["aws"];
+
+                        // 🔥 Ensure `payload` exists and contains `instanceIds`
+                        if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid start request: No instance IDs provided.");
+                            window.showErrorMessage("No instances selected for starting.");
+                            return;
+                        }
+
+                        const instanceIdsStart = payload.instanceIds;
+
+                        console.log(`📤 Starting AWS Instances for userId: ${userIdAWSstart}`, instanceIdsStart);
+                        window.showInformationMessage(`Starting ${instanceIdsStart.length} instance(s): ${instanceIdsStart.join(", ")}`);
+
+                        try {
+                            // ✅ Call `startAWSInstances` in CloudManager
+                            await this.cloudManager.startAWSInstances(userIdAWSstart, instanceIdsStart);
+                            console.log(`✅ Successfully initiated start for instances: ${instanceIdsStart.join(", ")}`);
+
+                            // ✅ Send a message back to the Webview to update the UI
+                            this.postMessage(webviewId, { 
+                                type: "startedResources", 
+                                startedInstances: instanceIdsStart, 
+                                userId: userIdAWSstart
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error starting instances for user ${userIdAWSstart}:`, error);
+                            window.showErrorMessage(`Error starting instances: ${error}`);
+                        }
+                        break;
+
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -675,6 +716,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
                         }
+                        if (message.type === "startedResources") {
+                            const startedInstances = message.startedInstances;
+                            console.log("🚀 Updating status for started instances:", startedInstances);
+
+                            startedInstances.forEach(instanceId => {
+                                const rows = document.querySelectorAll("#instancesTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // Instance ID column
+                                    if (idCell && idCell.textContent.trim() === instanceId) {
+                                        const statusCell = row.cells[2]; // Status column
+                                        statusCell.textContent = "running"; // ✅ Update status
+                                    }
+                                });
+                            });
+                        }   
                     });
 
                     document.getElementById("region-aws").addEventListener("change", function () {

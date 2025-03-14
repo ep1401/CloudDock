@@ -226,7 +226,7 @@ export class CloudManager {
             throw new Error(`Failed to refresh AWS instances: ${error}`);
         }
     }
-    
+
     async terminateAWSInstances(userIdAWS: string, instanceIds: string[]) {
         console.log(`🗑️ Requesting termination of AWS instances for user ${userIdAWS}`);
     
@@ -245,6 +245,32 @@ export class CloudManager {
         } catch (error) {
             console.error(`❌ Error terminating AWS instances for user ${userIdAWS}:`, error);
             throw new Error(`Failed to terminate AWS instances: ${error}`);
+        }
+    }    
+
+    async startAWSInstances(userIdAWS: string, instanceIds: string[]) {
+        console.log(`🚀 Requesting start of AWS instances for user ${userIdAWS}`);
+    
+        if (!userIdAWS) {
+            console.error("❌ No AWS user ID provided.");
+            throw new Error("AWS user ID is required to start instances.");
+        }
+    
+        if (!instanceIds || instanceIds.length === 0) {
+            console.error("❌ No instance IDs provided.");
+            throw new Error("At least one instance ID is required to start instances.");
+        }
+    
+        try {
+            // ✅ Call AWS Manager function to start instances
+            await this.awsManager.startInstances(userIdAWS, instanceIds);
+    
+            console.log(`✅ Successfully started AWS instances: ${instanceIds.join(", ")}`);
+            return instanceIds;
+    
+        } catch (error) {
+            console.error(`❌ Error starting AWS instances for user ${userIdAWS}:`, error);
+            throw new Error(`Failed to start AWS instances: ${error}`);
         }
     }    
     

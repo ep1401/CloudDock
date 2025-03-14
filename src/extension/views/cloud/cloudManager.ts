@@ -177,4 +177,32 @@ export class CloudManager {
     async getResourceGroupsForSubscription(provider: "azure", userId: string, subscriptionId: string) {
         return await this.azureManager.getResourceGroupsForSubscription(provider, userId, subscriptionId);
     }
+
+        /**
+     * Shuts down multiple AWS instances.
+     * @param userIdAWS The AWS user ID.
+     * @param instanceIds An array of instance IDs to be shut down.
+     */
+    async shutdownInstances(userIdAWS: string, instanceIds: string[]) {
+        if (!userIdAWS) {
+            console.error("❌ No AWS user ID provided.");
+            throw new Error("AWS user ID is required to shut down instances.");
+        }
+
+        if (!instanceIds || instanceIds.length === 0) {
+            console.error("❌ No instance IDs provided.");
+            throw new Error("At least one instance ID is required to shut down instances.");
+        }
+
+        console.log(`📤 Shutting down instances for AWS user ${userIdAWS}:`, instanceIds);
+
+        try {
+            // ✅ Call AWS Manager function (to be implemented in AWSManager.ts)
+            await this.awsManager.shutdownInstances(userIdAWS, instanceIds);
+            console.log(`✅ Successfully initiated shutdown for instances: ${instanceIds.join(", ")}`);
+        } catch (error) {
+            console.error(`❌ Failed to shut down instances: ${error}`);
+            throw new Error(`Instance shutdown failed: ${error}`);
+        }
+    }
 }

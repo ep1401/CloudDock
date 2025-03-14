@@ -123,7 +123,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error changing region: ${error}`);
                         }
                         break;
-                        case "createInstance":
+                    case "createInstance":
                             console.log(`🔹 Received createInstance request from webview ${webviewId}:`, data);
 
                             if (!webviewId) {
@@ -265,7 +265,45 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error fetching resource groups: ${error}`);
                         }
                         break;
+                    
+                    case "shutdownInstances":
+                        console.log("📩 Received shutdownInstances message:", data); // Debugging log
 
+                        // Ensure AWS user session exists
+                        if (!userSession["aws"]) {
+                            console.error("❌ No authenticated AWS user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with AWS first!");
+                            return;
+                        }
+
+                        const userIdAWS = userSession["aws"];
+
+                        // 🔥 Fix: Ensure `payload` exists and contains `instanceIds`
+                        if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid shutdown request: No instance IDs provided.");
+                            window.showErrorMessage("No instances selected for shutdown.");
+                            return;
+                        }
+
+                        const instanceIds = payload.instanceIds;
+
+                        console.log(`📤 Initiating shutdown for AWS instances (User: ${userIdAWS}):`, instanceIds);
+                        window.showInformationMessage(`Stopping ${instanceIds.length} instance(s): ${instanceIds.join(", ")}`);
+
+                        try {
+                            // ✅ Call `shutdownInstances` in CloudManager
+                            await this.cloudManager.shutdownInstances(userIdAWS, instanceIds);
+                            console.log(`✅ Successfully initiated shutdown for instances: ${instanceIds.join(", ")}`);
+                            this.postMessage(webviewId, { 
+                                type: "stoppedResources", 
+                                stoppedInstances: payload.instanceIds, 
+                                userId: userIdAWS
+                            });
+                        } catch (error) {
+                            console.error(`❌ Error shutting down instances for user ${userIdAWS}:`, error);
+                            window.showErrorMessage(`Error shutting down instances: ${error}`);
+                        }
+                        break;
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -537,6 +575,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("📂 Received resource groups:", message.resourceGroups);
                             updateResourceGroupDropdown(message.resourceGroups);
                         }
+                        if (message.type === "stoppedResources") {
+                            const stoppedInstances = message.stoppedInstances;
+                            console.log("🔹 Updating UI for stopped instances:", stoppedInstances);
+
+                            stoppedInstances.forEach(instanceId => {
+                                const rows = document.querySelectorAll("#instancesTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // Instance ID column
+                                    if (idCell && idCell.textContent.trim() === instanceId) {
+                                        const statusCell = row.cells[2]; // Status column
+                                        statusCell.textContent = "stopping"; // ✅ Update status
+                                    }
+                                });
+                            });
+                        }
                     });
 
                     document.getElementById("region-aws").addEventListener("change", function () {
@@ -572,6 +625,40 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { region, keyPair }
                         });
                     });
+
+                    document.getElementById("shutdownInstance").addEventListener("click", () => {
+                        const selectedInstances = [];
+                        console.log("🔹 Requesting instance shutdown...");
+
+                        // Get all checked checkboxes in the table
+                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
+                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
+                            if (instanceId) {
+                                selectedInstances.push(instanceId);
+                            }
+                        });
+
+                        // Ensure at least one instance is selected
+                        if (selectedInstances.length === 0) {
+                            alert("No instances selected for shutdown.");
+                            return;
+                        }
+
+                        console.log("📤 Sending shutdown request for instances:", selectedInstances);
+
+                        vscode.postMessage({
+                            type: "shutdownInstances",
+                            provider: "aws",
+                            webviewId,
+                            payload: { instanceIds: selectedInstances }
+                        });
+
+                        console.log("✅ Sent shutdown request in script");
+                    });
+
 
                     document.getElementById("createVM").addEventListener("click", () => {
                         const subscriptionId = document.getElementById("subscription").value;

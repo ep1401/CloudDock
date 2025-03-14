@@ -165,12 +165,14 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     }
 
                                     console.log(`✅ AWS Instance created successfully. Instance ID: ${instanceId}`);
-
+                                    window.showInformationMessage(`Instance ID: ${instanceId}`);
+                                    console.log("Instance ID Structure:", JSON.stringify(instanceId, null, 2));
                                     // ✅ Notify the webview about the created instance
                                     this.postMessage(webviewId, {
                                         type: "instanceCreated",
                                         instanceId: instanceId,
-                                        userId: instanceUserId,  
+                                        userId: instanceUserId, 
+                                        region: payload.region 
                                     });
 
                                 } catch (error) {
@@ -476,13 +478,56 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
                                     <td>\${instance.instanceId}</td>
-                                    <td>\${instance.instanceType}</td>
                                     <td>\${instance.state}</td>
                                     <td>\${instance.region}</td>
+                                    <td>N/A</td> <!-- Group placeholder -->
                                     <td>N/A</td> <!-- Shutdown schedule placeholder -->
                                 \`;
                                 tableBody.appendChild(row);
                             });
+                        }
+                        if (message.type === "instanceCreated") {
+                            let instanceId = message.instanceId?.instanceId || JSON.stringify(message.instanceId);
+                            const region = message.region;
+
+                            const table = document.getElementById("instancesTable").getElementsByTagName('tbody')[0];
+
+                            // Remove initial waiting row if it's present
+                            const initialRow = document.getElementById("initialRow");
+                            if (initialRow) {
+                                initialRow.remove();
+                            }
+
+                            // Create a new row
+                            const newRow = table.insertRow();
+
+                            // Checkbox column
+                            const selectCell = newRow.insertCell(0);
+                            const checkbox = document.createElement("input");
+                            checkbox.type = "checkbox";
+                            selectCell.appendChild(checkbox);
+                            selectCell.classList.add("checkbox-column");
+
+                            // Instance ID column
+                            const idCell = newRow.insertCell(1);
+                            idCell.textContent = instanceId;
+
+                            // Status column
+                            const statusCell = newRow.insertCell(2);
+                            statusCell.textContent = "Running";
+                            statusCell.classList.add("status-column");
+
+                            // Region
+                            const regionCell = newRow.insertCell(3);
+                            regionCell.textContent = region;
+
+                            // Group column
+                            const groupCell = newRow.insertCell(4);
+                            groupCell.textContent = "N/A";
+
+                            // Shutdown Schedule column
+                            const shutdownCell = newRow.insertCell(5);
+                            shutdownCell.textContent = "N/A";
                         }
                         if (message.type === "updateSubscriptions") {
                             console.log("✅ Received subscriptions:", message.subscriptions);

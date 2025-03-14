@@ -127,13 +127,31 @@
     </div>
 
     <!-- Action Buttons Below the Table -->
-    <div class="action-buttons">
-        <button id="createGroup">Create New Group</button>
-        <button id="addToGroup">Add to Group</button>
-        <button id="removeFromGroup">Remove from Group</button>
-        <button id="shutdownInstance">Stop Instance</button>
-        <button id="terminateInstance">Terminate Instance</button>
+    <div class="action-container">
+        <!-- Instance Actions -->
         <button id="refreshaws">Refresh Table</button>
+        <br>
+        <br>
+        <div class="action-group">
+            <label for="instanceAction">Instance Actions:</label>
+            <select id="instanceAction">
+                <option value="startaws">Start Instance</option>
+                <option value="stopaws">Stop Instance</option>
+                <option value="terminateaws">Terminate Instance</option>
+            </select>
+            <button id="submitInstanceAction">Submit</button>
+        </div>
+        <br>
+        <!-- Group Actions -->
+        <div class="action-group">
+            <label for="groupAction">Group Actions:</label>
+            <select id="groupAction">
+                <option value="createaws">Create Group</option>
+                <option value="addaws">Add to Group</option>
+                <option value="removeaws">Remove from Group</option>
+            </select>
+            <button id="submitGroupAction">Submit</button>
+        </div>
     </div>
 
 </body>

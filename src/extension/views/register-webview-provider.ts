@@ -711,40 +711,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
                     });
 
-                    document.getElementById("shutdownInstance").addEventListener("click", () => {
-                        const selectedInstances = [];
-                        console.log("🔹 Requesting instance shutdown...");
-
-                        // Get all checked checkboxes in the table
-                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
-
-                        checkboxes.forEach(checkbox => {
-                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
-                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
-                            if (instanceId) {
-                                selectedInstances.push(instanceId);
-                            }
-                        });
-
-                        // Ensure at least one instance is selected
-                        if (selectedInstances.length === 0) {
-                            alert("No instances selected for shutdown.");
-                            return;
-                        }
-
-                        console.log("📤 Sending shutdown request for instances:", selectedInstances);
-
-                        vscode.postMessage({
-                            type: "shutdownInstances",
-                            provider: "aws",
-                            webviewId,
-                            payload: { instanceIds: selectedInstances }
-                        });
-
-                        console.log("✅ Sent shutdown request in script");
-                    });
-
-
                     document.getElementById("createVM").addEventListener("click", () => {
                         const subscriptionId = document.getElementById("subscription").value;
                         const resourceGroup = document.getElementById("resourceGroup").value;
@@ -796,17 +762,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         console.log("📤 Sent refreshawsinstances message");
                     });
-                    
-                    document.getElementById("shutdownInstance").addEventListener("click", () => {
-                        console.log("🔹 Requesting instance shutdown...");
-                        
-                        // Send message to extension to stop the instance
-                        vscode.postMessage({ type: "stopInstance" });
-                    });
 
-                    document.getElementById("terminateInstance").addEventListener("click", () => {
+                    document.getElementById("submitInstanceAction").addEventListener("click", () => {
                         const selectedInstances = [];
-                        console.log("🗑️ Requesting instance termination...");
+                        console.log("🔹 Instance action requested...");
+
+                        // Get the selected action from the dropdown
+                        const selectedAction = document.getElementById("instanceAction").value;
 
                         // Get all checked checkboxes in the table
                         const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
@@ -821,22 +783,39 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         // Ensure at least one instance is selected
                         if (selectedInstances.length === 0) {
-                            alert("No instances selected for termination.");
+                            alert("No instances selected.");
                             return;
                         }
 
-                        console.log("📤 Sending terminate request for instances:", selectedInstances);
+                        let messageType = "";
+                        let actionMessage = "";
 
+                        switch (selectedAction) {
+                            case "startaws":
+                                messageType = "startInstances";
+                                actionMessage = "Starting AWS Instances";
+                                break;
+                            case "stopaws":
+                                messageType = "shutdownInstances";
+                                actionMessage = "Shutting down AWS Instances";
+                                break;
+                            case "terminateaws":
+                                messageType = "terminateInstances";
+                                actionMessage = "Terminating AWS Instances";
+                                break;
+                            default:
+                                alert("Invalid action selected.");
+                                return;
+                        }
+                        console.log("Sending Message from slected action", messageType);
                         // ✅ Send message to VS Code extension
                         vscode.postMessage({
-                            type: "terminateInstances",
+                            type: messageType,
+                            provider: "aws",
                             webviewId,
                             payload: { instanceIds: selectedInstances }
                         });
-
-                        console.log("✅ Sent terminateInstances message");
                     });
-
                 });
 
                 function updateSubscriptionDropdown(subscriptions) {

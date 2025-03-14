@@ -304,6 +304,37 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error shutting down instances: ${error}`);
                         }
                         break;
+
+                    case "refreshawsinstances":
+                        console.log("📩 Received request to refresh AWS instances");
+
+                        if (!userSession["aws"]) {
+                            console.error("❌ No authenticated AWS user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with AWS first!");
+                            return;
+                        }
+
+                        const userIdAWSRef = userSession["aws"];
+
+                        try {
+                            // ✅ Call the function in CloudManager to fetch updated instances
+                            const updatedInstances = await this.cloudManager.refreshAWSInstances(userIdAWSRef);
+                            window.showInformationMessage("Refreshing AWS Instances...");
+
+                            // ✅ Send the updated instance list back to the Webview
+                            this.postMessage(webviewId, { 
+                                type: "updateInstances", 
+                                instances: updatedInstances, 
+                                userId: userIdAWSRef 
+                            });
+
+                            console.log("✅ Successfully refreshed AWS instances");
+
+                        } catch (error) {
+                            console.error(`❌ Error refreshing AWS instances for user ${userIdAWSRef}:`, error);
+                            window.showErrorMessage(`Error refreshing AWS instances: ${error}`);
+                        }
+                        break;
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -698,6 +729,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 sshKey
                             }
                         });
+                    });
+
+                    document.getElementById("refreshaws").addEventListener("click", () => {
+                        console.log("🔄 Refresh AWS Instances button clicked");
+
+                        // ✅ Send a message to VS Code extension
+                        vscode.postMessage({
+                            type: "refreshawsinstances",
+                            webviewId
+                        });
+
+                        console.log("📤 Sent refreshawsinstances message");
                     });
                     
                     document.getElementById("shutdownInstance").addEventListener("click", () => {

@@ -205,4 +205,26 @@ export class CloudManager {
             throw new Error(`Instance shutdown failed: ${error}`);
         }
     }
+
+    async refreshAWSInstances(userIdAWS: string) {
+        console.log(`🔄 Fetching latest AWS instances for user ${userIdAWS}`);
+    
+        if (!userIdAWS) {
+            console.error("❌ No AWS user ID provided.");
+            throw new Error("AWS user ID is required to refresh instances.");
+        }
+    
+        try {
+            // ✅ Call AWS Manager function to fetch instances (we assume it exists)
+            const instances = await this.awsManager.fetchAllEC2InstancesAcrossRegions(userIdAWS);
+    
+            console.log(`✅ Retrieved ${instances.length} updated AWS instances`);
+            return instances;
+    
+        } catch (error) {
+            console.error(`❌ Error retrieving AWS instances for user ${userIdAWS}:`, error);
+            throw new Error(`Failed to refresh AWS instances: ${error}`);
+        }
+    }
+    
 }

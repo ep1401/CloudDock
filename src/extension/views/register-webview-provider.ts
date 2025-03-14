@@ -165,7 +165,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     }
 
                                     console.log(`✅ AWS Instance created successfully. Instance ID: ${instanceId}`);
-                                    window.showInformationMessage(`Instance ID: ${instanceId}`);
                                     console.log("Instance ID Structure:", JSON.stringify(instanceId, null, 2));
                                     // ✅ Notify the webview about the created instance
                                     this.postMessage(webviewId, {
@@ -333,6 +332,46 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         } catch (error) {
                             console.error(`❌ Error refreshing AWS instances for user ${userIdAWSRef}:`, error);
                             window.showErrorMessage(`Error refreshing AWS instances: ${error}`);
+                        }
+                        break;
+                    case "terminateInstances":
+                        console.log("📩 Received terminateInstances message:", data); // Debugging log
+
+                        if (!userSession["aws"]) {
+                            console.error("❌ No authenticated AWS user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with AWS first!");
+                            return;
+                        }
+
+                        const userIdAWSter = userSession["aws"];
+
+                        // 🔥 Ensure `payload` exists and contains `instanceIds`
+                        if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid terminate request: No instance IDs provided.");
+                            window.showErrorMessage("No instances selected for termination.");
+                            return;
+                        }
+
+                        const instanceIdster = payload.instanceIds;
+
+                        console.log(`📤 Terminating AWS Instances for userId: ${userIdAWSter}`, instanceIdster);
+                        window.showInformationMessage(`Terminating ${instanceIdster.length} instance(s): ${instanceIdster.join(", ")}`);
+
+                        try {
+                            // ✅ Call `terminateAWSInstances` in CloudManager
+                            await this.cloudManager.terminateAWSInstances(userIdAWSter, instanceIdster);
+                            console.log(`✅ Successfully initiated termination for instances: ${instanceIdster.join(", ")}`);
+
+                            // ✅ Send a message back to the Webview to update the UI
+                            this.postMessage(webviewId, { 
+                                type: "terminatedResources", 
+                                terminatedInstances: instanceIdster, 
+                                userId: userIdAWSter
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error terminating instances for user ${userIdAWSter}:`, error);
+                            window.showErrorMessage(`Error terminating instances: ${error}`);
                         }
                         break;
                 }
@@ -583,7 +622,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             // Status column
                             const statusCell = newRow.insertCell(2);
-                            statusCell.textContent = "Running";
+                            statusCell.textContent = "running";
                             statusCell.classList.add("status-column");
 
                             // Region
@@ -617,6 +656,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     if (idCell && idCell.textContent.trim() === instanceId) {
                                         const statusCell = row.cells[2]; // Status column
                                         statusCell.textContent = "stopping"; // ✅ Update status
+                                    }
+                                });
+                            });
+                        }
+                        if (message.type === "terminatedResources") {
+                            const terminatedInstances = message.terminatedInstances;
+                            console.log("🛑 Updating status for terminated instances:", terminatedInstances);
+
+                            terminatedInstances.forEach(instanceId => {
+                                const rows = document.querySelectorAll("#instancesTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // Instance ID column
+                                    if (idCell && idCell.textContent.trim() === instanceId) {
+                                        const statusCell = row.cells[2]; // Status column
+                                        statusCell.textContent = "terminated"; // ✅ Set status
                                     }
                                 });
                             });
@@ -749,6 +803,40 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         // Send message to extension to stop the instance
                         vscode.postMessage({ type: "stopInstance" });
                     });
+
+                    document.getElementById("terminateInstance").addEventListener("click", () => {
+                        const selectedInstances = [];
+                        console.log("🗑️ Requesting instance termination...");
+
+                        // Get all checked checkboxes in the table
+                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
+                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
+                            if (instanceId) {
+                                selectedInstances.push(instanceId);
+                            }
+                        });
+
+                        // Ensure at least one instance is selected
+                        if (selectedInstances.length === 0) {
+                            alert("No instances selected for termination.");
+                            return;
+                        }
+
+                        console.log("📤 Sending terminate request for instances:", selectedInstances);
+
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: "terminateInstances",
+                            webviewId,
+                            payload: { instanceIds: selectedInstances }
+                        });
+
+                        console.log("✅ Sent terminateInstances message");
+                    });
+
                 });
 
                 function updateSubscriptionDropdown(subscriptions) {

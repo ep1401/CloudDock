@@ -227,4 +227,25 @@ export class CloudManager {
         }
     }
     
+    async terminateAWSInstances(userIdAWS: string, instanceIds: string[]) {
+        console.log(`🗑️ Requesting termination of AWS instances for user ${userIdAWS}`);
+    
+        if (!userIdAWS) {
+            console.error("❌ No AWS user ID provided.");
+            throw new Error("AWS user ID is required to terminate instances.");
+        }
+    
+        try {
+            // ✅ Call AWS Manager function to terminate instances
+            await this.awsManager.terminateInstances(userIdAWS, instanceIds);
+    
+            console.log(`✅ Successfully terminated AWS instances: ${instanceIds.join(", ")}`);
+            return instanceIds;
+    
+        } catch (error) {
+            console.error(`❌ Error terminating AWS instances for user ${userIdAWS}:`, error);
+            throw new Error(`Failed to terminate AWS instances: ${error}`);
+        }
+    }    
+    
 }

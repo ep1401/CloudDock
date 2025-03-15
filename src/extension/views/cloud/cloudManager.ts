@@ -313,5 +313,26 @@ export class CloudManager {
             window.showErrorMessage(`❌ Error adding instances: ${error}`);
             return null;
         }
-    }    
+    } 
+    async removeInstancesFromGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
+        try {
+            // ✅ Format the instance list based on provider
+            const instanceList = {
+                aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
+                azure: provider === "azure" || provider === "both" ? instanceIds : undefined
+            };
+    
+            // ✅ Call the database function to remove instances from an existing group
+            const result = await database.removeInstancesFromGroup(provider, userId, instanceList);
+    
+            // ✅ Provide feedback to the user
+            window.showInformationMessage(`✅ Successfully removed ${instanceIds.length} instance(s) from group.`);
+            console.log(result);
+            return "N/A";
+        } catch (error) {
+            window.showErrorMessage(`❌ Error removing instances: ${error}`);
+            console.error("❌ Error removing instances from group:", error);
+            return null;
+        }
+    }   
 }

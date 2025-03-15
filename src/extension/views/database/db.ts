@@ -259,50 +259,76 @@ export const addInstancesToGroup = async (
           throw new Error(`User does not have access to group '${groupName}'.`);
       }
 
-      // ✅ Step 3: Update the instances with the provided group ID
-      const updateInstances = async (instances?: string[]) => {
-          if (!instances || instances.length === 0) return;
+      // ✅ Step 3: Insert instances if they do not exist or update if they do
+      const upsertInstances = async (instances?: string[], instanceTable?: string, sessionColumn?: string) => {
+          if (!instances || instances.length === 0 || !instanceTable || !sessionColumn) return;
 
-          const instanceTable = provider === "aws" ? "aws_instances" : "azure_instances";
+          const instanceData = instances.map(instanceId => ({
+              instance_id: instanceId,
+              group_id: groupId,
+              group_name: groupName,
+              [sessionColumn]: userId
+          }));
 
-          const { data: existingInstances, error: fetchError } = await supabase
+          const { error: upsertError } = await supabase
               .from(instanceTable)
-              .select("instance_id")
-              .in("instance_id", instances);
+              .upsert(instanceData, { onConflict: "instance_id" });
 
-          if (fetchError) {
-              throw new Error(`Error fetching existing instances: ${fetchError.message}`);
+          if (upsertError) {
+              throw new Error(`Error inserting/updating instances: ${upsertError.message}`);
           }
-
-          const existingInstanceIds = new Set(existingInstances.map(instance => instance.instance_id));
-
-          // Prepare update statements for existing instances
-          const updatePromises = instances
-              .filter(instanceId => existingInstanceIds.has(instanceId))
-              .map(instanceId =>
-                  supabase
-                      .from(instanceTable)
-                      .update({ group_id: groupId, group_name: groupName })
-                      .eq("instance_id", instanceId)
-              );
-
-          // Update instances
-          await Promise.all(updatePromises);
       };
 
       // Handle AWS instances
       if (provider === "aws" || provider === "both") {
-          await updateInstances(instanceList.aws);
+          await upsertInstances(instanceList.aws, "aws_instances", "aws_id");
       }
 
       // Handle Azure instances
       if (provider === "azure" || provider === "both") {
-          await updateInstances(instanceList.azure);
+          await upsertInstances(instanceList.azure, "azure_instances", "azure_id");
       }
 
       return `✅ Instances successfully added to group "${groupName}".`;
   } catch (error) {
       console.error("❌ Error in addInstancesToGroup:", error);
+      throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};
+
+export const removeInstancesFromGroup = async (
+  provider: "aws" | "azure" | "both",
+  userId: string,
+  instanceList: { aws?: string[]; azure?: string[] }
+): Promise<string> => {
+  try {
+      // ✅ Function to delete instances from the instance table
+      const deleteInstances = async (instances?: string[], instanceTable?: string) => {
+          if (!instances || instances.length === 0 || !instanceTable) return;
+
+          const { error: deleteError } = await supabase
+              .from(instanceTable)
+              .delete()
+              .in("instance_id", instances);
+
+          if (deleteError) {
+              throw new Error(`Error removing instances from group: ${deleteError.message}`);
+          }
+      };
+
+      // ✅ Handle AWS instances
+      if (provider === "aws" || provider === "both") {
+          await deleteInstances(instanceList.aws, "aws_instances");
+      }
+
+      // ✅ Handle Azure instances
+      if (provider === "azure" || provider === "both") {
+          await deleteInstances(instanceList.azure, "azure_instances");
+      }
+
+      return `✅ Instances successfully removed from group.`;
+  } catch (error) {
+      console.error("❌ Error in removeInstancesFromGroup:", error);
       throw new Error(error instanceof Error ? error.message : String(error));
   }
 };

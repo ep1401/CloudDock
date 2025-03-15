@@ -517,6 +517,54 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error adding instances: ${error}`);
                         }
                         break;
+                    case "removeFromGroup":
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in removeFromGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const userIdRemoveGroup = userSession[provider];
+
+                        if (!userIdRemoveGroup) {
+                            console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                            window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                            return;
+                        }
+
+                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid remove request: Missing instance IDs.");
+                            window.showErrorMessage("Missing instances for removal from group.");
+                            return;
+                        }
+
+                        const { instanceIds: instancesToRemove } = payload;
+
+                        window.showInformationMessage(`Removing ${instancesToRemove.length} instance(s) from a group.`);
+
+                        try {
+                            // ✅ Call the general `removeInstancesFromGroup` function in CloudManager
+                            const groupname = await this.cloudManager.removeInstancesFromGroup(provider, userIdRemoveGroup, instancesToRemove);
+
+                            if (!groupname) {
+                                return;
+                            }
+                            console.log(`✅ Successfully removed instances from group: ${instancesToRemove.join(", ")}`);
+
+                            // ✅ Send message back to Webview to update UI
+                            this.postMessage(webviewId, {
+                                type: "groupCreated",
+                                provider,
+                                groupname,
+                                instances: instancesToRemove,
+                                userId: userIdRemoveGroup
+                            });
+                        } catch (error) {
+                            console.error(`❌ Error removing instances from group for user ${userIdRemoveGroup}:`, error);
+                            window.showErrorMessage(`Error removing instances: ${error}`);
+                        }
+                        break;
+
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);

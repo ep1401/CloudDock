@@ -766,6 +766,5 @@ export class AWSManager {
             console.error(`❌ Error starting instances for user ${userIdAWS}:`, error);
             window.showErrorMessage(`Error starting instances: ${error}`);
         }
-    }
-      
+    }  
 }

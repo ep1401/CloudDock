@@ -447,6 +447,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         try {
                             // ✅ Call the general `createGroup` function in CloudManager
                             const groupname = await this.cloudManager.createGroup(provider, userIdCreateGroup, instancesNewGroup);
+
+                            if (!groupname) {
+                                return;
+                            }
                             console.log(`✅ Successfully created ${provider.toUpperCase()} group.`);
 
                             // ✅ Notify the webview about the created group
@@ -461,6 +465,56 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         } catch (error) {
                             console.error(`❌ Error creating group for ${provider.toUpperCase()} user ${userIdCreateGroup}:`, error);
                             window.showErrorMessage(`Error creating group: ${error}`);
+                        }
+                        break;
+                    case "addToGroup":
+                        console.log(`🔹 Received addToGroup request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in addToGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const userIdAddGroup = userSession[provider];
+
+                        if (!userIdAddGroup) {
+                            console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                            window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                            return;
+                        }
+
+                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid add request: Missing instance IDs.");
+                            window.showErrorMessage("Missing instances for adding to group.");
+                            return;
+                        }
+
+                        const { instanceIds: instancesToAdd } = payload;
+
+                        console.log(`📤 Adding instances to ${provider.toUpperCase()} Group for userId: ${userIdAddGroup}`, instancesToAdd);
+                        window.showInformationMessage(`Adding ${instancesToAdd.length} instance(s) to a group.`);
+
+                        try {
+                            // ✅ Call the general `addInstancesToGroup` function in CloudManager
+                            const groupname = await this.cloudManager.addInstancesToGroup(provider, userIdAddGroup, instancesToAdd);
+
+                            if (!groupname) {
+                                return;
+                            }
+                            console.log(`✅ Successfully added instances to group: ${instancesToAdd.join(", ")}`);
+
+                            // ✅ Send message back to Webview to update UI
+                            this.postMessage(webviewId, {
+                                type: "groupCreated",
+                                provider,
+                                groupname,
+                                instances: instancesToAdd,
+                                userId: userIdAddGroup
+                            });
+                        } catch (error) {
+                            console.error(`❌ Error adding instances to group for user ${userIdAddGroup}:`, error);
+                            window.showErrorMessage(`Error adding instances: ${error}`);
                         }
                         break;
                 }

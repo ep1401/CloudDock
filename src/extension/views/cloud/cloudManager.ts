@@ -284,6 +284,34 @@ export class CloudManager {
         } catch (error) {
             console.error("❌ Error creating group:", error);
             window.showErrorMessage(`❌ Error creating group: ${error}`);
+            return null;
         }
     }
+    async addInstancesToGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
+        try {
+            // ✅ Prompt user for group name
+            const groupName = await this.promptForInput("Enter Group Name", "Group name...");
+            if (!groupName) {
+                window.showErrorMessage("❌ Adding instances canceled: No group name provided.");
+                return;
+            }
+    
+            // ✅ Format the instance list based on provider
+            const instanceList = {
+                aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
+                azure: provider === "azure" || provider === "both" ? instanceIds : undefined
+            };
+    
+            // ✅ Call the database function to add instances to an existing group
+            const result = await database.addInstancesToGroup(provider, userId, groupName, instanceList);
+    
+            // ✅ Provide feedback to the user
+            window.showInformationMessage(`✅ Successfully added ${instanceIds.length} instance(s) to group "${groupName}".`);
+            console.log(result);
+            return groupName;
+        } catch (error) {
+            window.showErrorMessage(`❌ Error adding instances: ${error}`);
+            return null;
+        }
+    }    
 }

@@ -1,6 +1,6 @@
 import * as AWS from 'aws-sdk';
 import { window } from "vscode";
-
+import * as database from "../database/db";
 
 export class AWSManager {
    private userSessions: Map<string, { awsConfig?: AWS.Config; selectedRegion: string }> = new Map();
@@ -522,7 +522,7 @@ export class AWSManager {
     * Retrieves all EC2 instances associated with the user.
     * @param userId Unique user identifier.
     */
-   async fetchAllEC2InstancesAcrossRegions(userId: string) {
+    async fetchAllEC2InstancesAcrossRegions(userId: string) {
         const userSession = this.userSessions.get(userId);
 
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
@@ -533,12 +533,10 @@ export class AWSManager {
 
         console.log(`🔹 Fetching AWS EC2 instances for user ${userId} across multiple regions...`);
 
-        // List of regions to fetch instances from
         const regions = ["us-east-2", "us-west-1", "us-west-2", "eu-west-1"];
         
-        let allInstances: { instanceId: string, instanceType: string, state: string, region: string }[] = [];
+        let allInstances: { instanceId: string, instanceType: string, state: string, region: string, groupName: string | null }[] = [];
 
-        // Function to fetch instances from a specific region
         const fetchInstances = async (region: string) => {
             const ec2 = new AWS.EC2({
                 accessKeyId: userSession.awsConfig?.credentials?.accessKeyId ?? '',
@@ -556,7 +554,8 @@ export class AWSManager {
                         instanceId: instance.InstanceId ?? "N/A",
                         instanceType: instance.InstanceType ?? "Unknown",
                         state: instance.State?.Name ?? "Unknown",
-                        region: region
+                        region: region,
+                        groupName: null // Add default value for groupName
                     })) ?? []
                 ) || [];
 
@@ -569,15 +568,27 @@ export class AWSManager {
             }
         };
 
-        // Fetch instances from all specified regions concurrently
         const results = await Promise.all(regions.map(fetchInstances));
 
-        // Flatten the array of results into a single list
+        // Flatten array of instance results
         allInstances = results.flat();
 
         console.log(`✅ Total instances retrieved for user ${userId}: ${allInstances.length}`);
 
-        // Notify frontend about the new instances
+        // Fetch instance groups from the database
+        const instanceIds = allInstances.map(instance => instance.instanceId);
+        const instanceGroups = await database.getInstanceGroups("aws", instanceIds);
+
+        console.log("instanceGroups:", instanceGroups);
+
+        // Map instance groups to instances
+        allInstances = allInstances.map(instance => ({
+            ...instance,
+            groupName: instanceGroups[instance.instanceId] || null
+        }));
+
+        console.log(`✅ Updated instances with group names for user ${userId}`);
+
         return allInstances;
     }
 

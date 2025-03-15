@@ -414,7 +414,55 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error starting instances: ${error}`);
                         }
                         break;
+                    case "createGroup":
+                        console.log(`🔹 Received createGroup request from webview ${webviewId}:`, data);
 
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in createGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        // ✅ Retrieve user session based on provider
+                        const userIdCreateGroup = userSession[provider];
+
+                        if (!userIdCreateGroup) {
+                            console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                            window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                            return;
+                        }
+
+                        // ✅ Validate required parameters
+                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid group creation request: Missing instance IDs.");
+                            window.showErrorMessage("Missing instances for group creation.");
+                            return;
+                        }
+
+                        const { instanceIds: instancesNewGroup } = payload;
+
+                        console.log(`📤 Creating ${provider.toUpperCase()} Group for userId: ${userIdCreateGroup}`, instancesNewGroup);
+                        window.showInformationMessage(`Creating ${provider.toUpperCase()} Group with ${instancesNewGroup.length} instance(s).`);
+
+                        try {
+                            // ✅ Call the general `createGroup` function in CloudManager
+                            const groupname = await this.cloudManager.createGroup(provider, userIdCreateGroup, instancesNewGroup);
+                            console.log(`✅ Successfully created ${provider.toUpperCase()} group.`);
+
+                            // ✅ Notify the webview about the created group
+                            this.postMessage(webviewId, {
+                                type: "groupCreated",
+                                provider,
+                                groupname,
+                                instances: instancesNewGroup,
+                                userId: userIdCreateGroup
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error creating group for ${provider.toUpperCase()} user ${userIdCreateGroup}:`, error);
+                            window.showErrorMessage(`Error creating group: ${error}`);
+                        }
+                        break;
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -624,12 +672,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             message.instances.forEach(instance => {
                                 const row = document.createElement("tr");
+                                const groupName = instance.groupName ? instance.groupName : "N/A";
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
                                     <td>\${instance.instanceId}</td>
                                     <td>\${instance.state}</td>
                                     <td>\${instance.region}</td>
-                                    <td>N/A</td> <!-- Group placeholder -->
+                                    <td>\${groupName}</td>
                                     <td>N/A</td> <!-- Shutdown schedule placeholder -->
                                 \`;
                                 tableBody.appendChild(row);
@@ -730,7 +779,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     }
                                 });
                             });
-                        }   
+                        }
+                        if (message.type === "groupCreated") {
+                            const { provider, groupname, instances, userId } = message;
+
+                            instances.forEach(instanceId => {
+                                const rows = document.querySelectorAll("#instancesTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // Instance ID column
+                                    if (idCell && idCell.textContent.trim() === instanceId) {
+                                        const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
+                                        groupNameCell.textContent = groupname; // ✅ Update group name
+                                    }
+                                });
+                            });
+                        }
                     });
 
                     document.getElementById("region-aws").addEventListener("change", function () {
@@ -872,6 +935,64 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { instanceIds: selectedInstances }
                         });
                     });
+                    document.getElementById("submitGroupAction").addEventListener("click", () => {
+                        const selectedInstances = [];
+                        console.log("🔹 Group action requested...");
+
+                        // Get the selected action from the dropdown
+                        const selectedAction = document.getElementById("groupAction").value;
+
+                        // Get all checked checkboxes in the table
+                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
+                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
+                            if (instanceId) {
+                                selectedInstances.push(instanceId);
+                            }
+                        });
+
+                        // Ensure at least one instance is selected
+                        if (selectedInstances.length === 0) {
+                            alert("No instances selected.");
+                            return;
+                        }
+
+                        let messageType = "";
+                        let actionMessage = "";
+
+                        switch (selectedAction) {
+                            case "createaws":
+                                messageType = "createGroup";
+                                actionMessage = "Creating AWS Group";
+                                break;
+                            case "addaws":
+                                messageType = "addToGroup";
+                                actionMessage = "Adding Instances to AWS Group";
+                                break;
+                            case "removeaws":
+                                messageType = "removeFromGroup";
+                                actionMessage = "Removing Instances from AWS Group";
+                                break;
+                            case "downtimeaws":
+                                messageType = "scheduleDowntime";
+                                actionMessage = "Scheduling Downtime for AWS Group";
+                                break;
+                            default:
+                                alert("Invalid action selected.");
+                                return;
+                        }
+                        
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "aws",
+                            webviewId,
+                            payload: { instanceIds: selectedInstances }
+                        });
+                    });
+
                 });
 
                 function updateSubscriptionDropdown(subscriptions) {

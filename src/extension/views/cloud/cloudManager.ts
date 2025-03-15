@@ -40,7 +40,7 @@ export class CloudManager {
             
                 console.log(`🔹 Fetched AWS Key Pairs for ${userAccountId}:`, keyPairs);
 
-                const ec2instances = await this.awsManager.fetchAllEC2InstancesAcrossRegions(userAccountId)
+                const ec2instances = await this.awsManager.fetchAllEC2InstancesAcrossRegions(userAccountId);
             
                 // ✅ Return the userAccountId and keyPairs
                 return { userAccountId, keyPairs, ec2instances };
@@ -127,23 +127,6 @@ export class CloudManager {
             return await this.azureManager.stopInstance(userId, instanceId);
         }
         throw new Error("Invalid provider specified.");
-    }
-
-    /**
-     * Fetches instances associated with a user from AWS or Azure.
-     * @param provider "aws" | "azure"
-     * @param userId Unique ID for AWS or Azure session.
-     */
-    async fetchInstances(provider: "aws" | "azure", userId: string) {
-        return "hello";
-    }
-
-    /**
-     * Fetches all instance groups for AWS or Azure.
-     * @param provider "aws" | "azure"
-     */
-    async fetchGroups(provider: "aws" | "azure") {
-        return "hello";
     }
 
     /**
@@ -273,5 +256,34 @@ export class CloudManager {
             throw new Error(`Failed to start AWS instances: ${error}`);
         }
     }    
-    
+    async createGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
+        try {
+            // ✅ Prompt user for group name
+            const groupName = await this.promptForInput("Enter Group Name", "Group name...");
+            if (!groupName) {
+                window.showErrorMessage("❌ Group creation canceled: No name provided.");
+                return;
+            }
+
+            console.log(`📩 Creating ${provider.toUpperCase()} group: "${groupName}" for user: ${userId}`);
+
+            // ✅ Format the instance list based on provider
+            const instanceList = {
+                aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
+                azure: provider === "azure" || provider === "both" ? instanceIds : undefined
+            };
+
+            // ✅ Call the database function to create the group
+            const result = await database.createInstanceGroup(provider, userId, groupName, instanceList);
+
+            // ✅ Provide feedback to the user
+            window.showInformationMessage(`✅ Group "${groupName}" created successfully.`);
+            console.log(result);
+            return groupName;
+
+        } catch (error) {
+            console.error("❌ Error creating group:", error);
+            window.showErrorMessage(`❌ Error creating group: ${error}`);
+        }
+    }
 }

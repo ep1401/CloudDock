@@ -1,325 +1,188 @@
-import { Pool } from "pg";
-import * as dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+import { v4 as uuidv4 } from 'uuid';
 
-// Load environment variables
-dotenv.config();
+dotenv.config(); // Load environment variables
 
-// Create a PostgreSQL connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // Required for AWS RDS if SSL is enforced
-  },
-});
+// Initialize Supabase
+const supabaseUrl = "https://lhvuliyyfavdoevigjwl.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxodnVsaXl5ZmF2ZG9ldmlnandsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIwNjk3MzksImV4cCI6MjA1NzY0NTczOX0.BYK8g5pHX--8E0LvBhslgZdPei8h_SMEjyhsSvajq5s";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Test the connection
-pool.connect()
-  .then(client => {
-    console.log("🚀 Connected to AWS PostgreSQL!");
-    client.release();
-  })
-  .catch(err => console.error("❌ Database connection error:", err.stack));
-
-export const query = (text: string, params?: any[]) => pool.query(text, params);
-
-/**
- * Creates a new instance group and assigns instances to it.
- * Ensures no instance is already in a group and verifies user ownership.
- */
 export const createInstanceGroup = async (
   provider: "aws" | "azure" | "both",
   userId: string,
-  newGroupName: string,
-  instanceList: { aws?: string[]; azure?: string[] } // Object with separate AWS & Azure instances
+  groupName: string,
+  instanceList: { aws?: string[]; azure?: string[] }
 ): Promise<string> => {
-  const client = await pool.connect();
-
   try {
-    await client.query("BEGIN"); // Start transaction
+    // Determine the appropriate table names
+    const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
+    const instanceTable = provider === "aws" ? "aws_instances" : "azure_instances";
+    const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
 
-    // Validate instance lists
-    const awsInstances = instanceList.aws || [];
-    const azureInstances = instanceList.azure || [];
-    const useAWS = provider === "aws" || provider === "both";
-    const useAzure = provider === "azure" || provider === "both";
+    // ✅ Step 1: Check if the group exists, otherwise create it
+    const { data: existingGroup, error: groupError } = await supabase
+      .from("instance_groups")
+      .select("group_id")
+      .eq("group_name", groupName)
+      .maybeSingle();
 
-    // Check if any AWS instances are already in a group
-    if (useAWS && awsInstances.length > 0) {
-      const { rows: existingAWSGroups } = await client.query(
-        "SELECT instance_id FROM aws_instances WHERE instance_id = ANY($1) AND group_id IS NOT NULL",
-        [awsInstances]
-      );
-      if (existingAWSGroups.length > 0) {
-        const groupedInstances = existingAWSGroups.map(row => row.instance_id).join(", ");
-        throw new Error(`❌ AWS Instances already in a group: ${groupedInstances}`);
+    if (groupError) {
+      throw new Error(`Error checking group name: ${groupError.message}`);
+    }
+
+    let groupId = existingGroup?.group_id || uuidv4();
+
+    if (!existingGroup) {
+      const { error: insertGroupError } = await supabase
+        .from("instance_groups")
+        .insert([{ group_id: groupId, group_name: groupName }]);
+
+      if (insertGroupError) {
+        throw new Error(`Error creating group: ${insertGroupError.message}`);
       }
     }
 
-    // Check if any Azure instances are already in a group
-    if (useAzure && azureInstances.length > 0) {
-      const { rows: existingAzureGroups } = await client.query(
-        "SELECT instance_id FROM azure_instances WHERE instance_id = ANY($1) AND group_id IS NOT NULL",
-        [azureInstances]
-      );
-      if (existingAzureGroups.length > 0) {
-        const groupedInstances = existingAzureGroups.map(row => row.instance_id).join(", ");
-        throw new Error(`❌ Azure Instances already in a group: ${groupedInstances}`);
+    // ✅ Step 2: Ensure the user session exists and add the group ID
+    const { data: sessionData, error: sessionError } = await supabase
+      .from(sessionTable)
+      .select("group_ids")
+      .eq(sessionColumn, userId)
+      .maybeSingle();
+
+    if (sessionError) {
+      throw new Error(`Error fetching session data from ${sessionTable}: ${sessionError.message}`);
+    }
+
+    let updatedGroupIds = sessionData ? [...new Set([...sessionData.group_ids, groupId])] : [groupId];
+
+    if (sessionData) {
+      // Update existing session with new group ID
+      const { error: updateSessionError } = await supabase
+        .from(sessionTable)
+        .update({ group_ids: updatedGroupIds })
+        .eq(sessionColumn, userId);
+
+      if (updateSessionError) {
+        throw new Error(`Error updating session in ${sessionTable}: ${updateSessionError.message}`);
+      }
+    } else {
+      // Insert new session if not found
+      const { error: insertSessionError } = await supabase
+        .from(sessionTable)
+        .insert([{ [sessionColumn]: userId, group_ids: updatedGroupIds }]);
+
+      if (insertSessionError) {
+        throw new Error(`Error inserting session in ${sessionTable}: ${insertSessionError.message}`);
       }
     }
 
-    // Create the new group
-    const { rows } = await client.query(
-      "INSERT INTO instance_groups (group_name) VALUES ($1) RETURNING group_id",
-      [newGroupName]
-    );
-    const newGroupId = rows[0].group_id;
+    // ✅ Step 3: Insert or update instances in the _instances table
+    const updateInstances = async (instances?: string[]) => {
+      if (!instances || instances.length === 0) return;
 
-    // Assign AWS instances to the group
-    if (useAWS && awsInstances.length > 0) {
-      await client.query(
-        "UPDATE aws_instances SET group_id = $1 WHERE instance_id = ANY($2) AND aws_id = $3",
-        [newGroupId, awsInstances, userId]
-      );
+      // Fetch existing instances
+      const { data: existingInstances, error: fetchError } = await supabase
+        .from(instanceTable)
+        .select("instance_id")
+        .in("instance_id", instances);
 
-      // Update AWS user session with the new group
-      await client.query(
-        "UPDATE aws_sessions SET group_ids = array_append(group_ids, $1) WHERE aws_id = $2",
-        [newGroupId, userId]
-      );
-    }
-
-    // Assign Azure instances to the group
-    if (useAzure && azureInstances.length > 0) {
-      await client.query(
-        "UPDATE azure_instances SET group_id = $1 WHERE instance_id = ANY($2) AND azure_id = $3",
-        [newGroupId, azureInstances, userId]
-      );
-
-      // Update Azure user session with the new group
-      await client.query(
-        "UPDATE azure_sessions SET group_ids = array_append(group_ids, $1) WHERE azure_id = $2",
-        [newGroupId, userId]
-      );
-    }
-
-    await client.query("COMMIT"); // Commit transaction
-    return `✅ Group created successfully with ID: ${newGroupId}`;
-  } catch (err) {
-    await client.query("ROLLBACK"); // Rollback transaction on error
-    return `❌ Error creating group: ${err}`;
-  } finally {
-    client.release(); // Release client back to the pool
-  }
-};
-
-
-/**
- * Adds instances to an existing group.
- * Ensures instances are not already in a different group and verifies user ownership.
- */
-export const addInstancesToGroup = async (
-  provider: "aws" | "azure" | "both",
-  userId: string,
-  groupId: string,
-  instanceList: { aws?: string[]; azure?: string[] } // Separate AWS & Azure instance lists
-): Promise<string> => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN"); // Start transaction
-
-    // Validate instance lists
-    const awsInstances = instanceList.aws || [];
-    const azureInstances = instanceList.azure || [];
-    const useAWS = provider === "aws" || provider === "both";
-    const useAzure = provider === "azure" || provider === "both";
-
-    // Check if the group exists
-    const { rowCount: groupExists } = await client.query(
-      "SELECT 1 FROM instance_groups WHERE group_id = $1",
-      [groupId]
-    );
-    if (groupExists === 0) {
-      throw new Error(`❌ Group ID ${groupId} does not exist.`);
-    }
-
-    // Check if any AWS instances are already in a different group
-    if (useAWS && awsInstances.length > 0) {
-      const { rows: existingAWSGroups } = await client.query(
-        "SELECT instance_id FROM aws_instances WHERE instance_id = ANY($1) AND group_id IS NOT NULL",
-        [awsInstances]
-      );
-      if (existingAWSGroups.length > 0) {
-        const groupedInstances = existingAWSGroups.map(row => row.instance_id).join(", ");
-        throw new Error(`❌ AWS Instances already in a group: ${groupedInstances}`);
+      if (fetchError) {
+        throw new Error(`Error fetching existing instances: ${fetchError.message}`);
       }
-    }
 
-    // Check if any Azure instances are already in a different group
-    if (useAzure && azureInstances.length > 0) {
-      const { rows: existingAzureGroups } = await client.query(
-        "SELECT instance_id FROM azure_instances WHERE instance_id = ANY($1) AND group_id IS NOT NULL",
-        [azureInstances]
-      );
-      if (existingAzureGroups.length > 0) {
-        const groupedInstances = existingAzureGroups.map(row => row.instance_id).join(", ");
-        throw new Error(`❌ Azure Instances already in a group: ${groupedInstances}`);
+      const existingInstanceIds = new Set(existingInstances.map(instance => instance.instance_id));
+
+      // Prepare data for insertion (new instances) or updates (existing instances)
+      const newInstances = instances
+        .filter(instanceId => !existingInstanceIds.has(instanceId))
+        .map(instanceId => ({
+          instance_id: instanceId,
+          group_id: groupId,
+          group_name: groupName,
+          [sessionColumn]: userId, // Assign user to instance
+        }));
+
+      const updatePromises = instances
+        .filter(instanceId => existingInstanceIds.has(instanceId))
+        .map(instanceId =>
+          supabase
+            .from(instanceTable)
+            .update({ group_id: groupId, group_name: groupName })
+            .eq("instance_id", instanceId)
+        );
+
+      // Insert new instances
+      if (newInstances.length > 0) {
+        const { error: insertError } = await supabase
+          .from(instanceTable)
+          .insert(newInstances);
+
+        if (insertError) {
+          throw new Error(`Error inserting instances: ${insertError.message}`);
+        }
       }
-    }
 
-    let updatedRows = 0;
+      // Update existing instances
+      await Promise.all(updatePromises);
+    };
 
-    // Assign AWS instances to the group
-    if (useAWS && awsInstances.length > 0) {
-      const { rowCount } = await client.query(
-        "UPDATE aws_instances SET group_id = $1 WHERE instance_id = ANY($2) AND aws_id = $3",
-        [groupId, awsInstances, userId]
-      );
-      updatedRows += rowCount ?? 0;
-
-      // Update AWS user session with the group
-      await client.query(
-        "UPDATE aws_sessions SET group_ids = array_append(group_ids, $1) WHERE aws_id = $2 AND NOT ($1 = ANY(group_ids))",
-        [groupId, userId]
-      );
-    }
-
-    // Assign Azure instances to the group
-    if (useAzure && azureInstances.length > 0) {
-      const { rowCount } = await client.query(
-        "UPDATE azure_instances SET group_id = $1 WHERE instance_id = ANY($2) AND azure_id = $3",
-        [groupId, azureInstances, userId]
-      );
-      updatedRows += rowCount ?? 0;
-
-      // Update Azure user session with the group
-      await client.query(
-        "UPDATE azure_sessions SET group_ids = array_append(group_ids, $1) WHERE azure_id = $2 AND NOT ($1 = ANY(group_ids))",
-        [groupId, userId]
-      );
-    }
-
-    if (updatedRows === 0) {
-      throw new Error(`❌ No instances were updated. Ensure you own these instances.`);
-    }
-
-    await client.query("COMMIT"); // Commit transaction
-    return `✅ Successfully added ${updatedRows} instance(s) to group ${groupId}.`;
-  } catch (err) {
-    await client.query("ROLLBACK"); // Rollback on error
-    return `❌ Error adding instances to group: ${err}`;
-  } finally {
-    client.release(); // Release client back to the pool
-  }
-};
-
-export const removeInstanceFromGroup = async (
-  provider: "aws" | "azure" | "both",
-  userId: string,
-  groupId: string,
-  instanceList: { aws?: string[]; azure?: string[] } // Separate AWS & Azure instance lists
-): Promise<string> => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN"); // Start transaction
-
-    // Validate instance lists
-    const awsInstances = instanceList.aws || [];
-    const azureInstances = instanceList.azure || [];
-    const useAWS = provider === "aws" || provider === "both";
-    const useAzure = provider === "azure" || provider === "both";
-
-    let removedRows = 0;
-
-    // Remove AWS instances from the group
-    if (useAWS && awsInstances.length > 0) {
-      const { rowCount } = await client.query(
-        "UPDATE aws_instances SET group_id = NULL WHERE instance_id = ANY($1) AND aws_id = $2 AND group_id = $3",
-        [awsInstances, userId, groupId]
-      );
-      removedRows += rowCount ?? 0;
-    }
-
-    // Remove Azure instances from the group
-    if (useAzure && azureInstances.length > 0) {
-      const { rowCount } = await client.query(
-        "UPDATE azure_instances SET group_id = NULL WHERE instance_id = ANY($1) AND azure_id = $2 AND group_id = $3",
-        [azureInstances, userId, groupId]
-      );
-      removedRows += rowCount ?? 0;
-    }
-
-    if (removedRows === 0) {
-      throw new Error(`❌ No instances were removed. Ensure you own these instances and they are in the correct group.`);
-    }
-
-    // Check if any instances still belong to the group
-    const { rowCount: remainingInstances } = await client.query(
-      "SELECT 1 FROM aws_instances WHERE group_id = $1 UNION ALL SELECT 1 FROM azure_instances WHERE group_id = $1",
-      [groupId]
-    );
-
-    // If no more instances are part of this group, remove it from the user's `group_ids[]`
-    if (remainingInstances === 0) {
-      await client.query(
-        "UPDATE aws_sessions SET group_ids = array_remove(group_ids, $1) WHERE aws_id = $2",
-        [groupId, userId]
-      );
-      await client.query(
-        "UPDATE azure_sessions SET group_ids = array_remove(group_ids, $1) WHERE azure_id = $2",
-        [groupId, userId]
-      );
-    }
-
-    await client.query("COMMIT"); // Commit transaction
-    return `✅ Successfully removed ${removedRows} instance(s) from group ${groupId}.`;
-  } catch (err) {
-    await client.query("ROLLBACK"); // Rollback on error
-    return `❌ Error removing instances from group: ${err}`;
-  } finally {
-    client.release(); // Release client back to the pool
-  }
-};
-
-export const getInstancesFromGroup = async (
-  provider: "aws" | "azure" | "both",
-  groupId: string
-): Promise<{ aws?: string[]; azure?: string[] } | string> => {
-  const client = await pool.connect();
-
-  try {
-    let awsInstances: string[] = [];
-    let azureInstances: string[] = [];
-
-    // Fetch AWS instances from the group
+    // Handle AWS instances
     if (provider === "aws" || provider === "both") {
-      const { rows } = await client.query(
-        "SELECT instance_id FROM aws_instances WHERE group_id = $1",
-        [groupId]
-      );
-      awsInstances = rows.map(row => row.instance_id);
+      await updateInstances(instanceList.aws);
     }
 
-    // Fetch Azure instances from the group
+    // Handle Azure instances
     if (provider === "azure" || provider === "both") {
-      const { rows } = await client.query(
-        "SELECT instance_id FROM azure_instances WHERE group_id = $1",
-        [groupId]
-      );
-      azureInstances = rows.map(row => row.instance_id);
+      await updateInstances(instanceList.azure);
     }
 
-    // Check if no instances were found
-    if (awsInstances.length === 0 && azureInstances.length === 0) {
-      return `❌ No instances found for group ID: ${groupId}`;
+    return `Group '${groupName}' created and instances updated successfully.`;
+  } catch (error) {
+    console.error("Error in createInstanceGroup:", error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error(String(error));
     }
-
-    return { aws: awsInstances.length ? awsInstances : undefined, azure: azureInstances.length ? azureInstances : undefined };
-  } catch (err) {
-    return `❌ Error retrieving instances from group: ${err}`;
-  } finally {
-    client.release(); // Release client back to the pool
   }
 };
 
+
+// Function to fetch instance groups
+export const getInstanceGroups = async (
+  provider: "aws" | "azure",
+  instanceIds: string[]
+): Promise<Record<string, string>> => {
+  try {
+    if (instanceIds.length === 0) {
+      return {};
+    }
+
+    const instanceTable = provider === "aws" ? "aws_instances" : "azure_instances";
+
+    // Query the database to fetch group names for the given instances
+    const { data, error } = await supabase
+      .from(instanceTable)
+      .select("instance_id, group_name")
+      .in("instance_id", instanceIds);
+
+    if (error) {
+      throw new Error(`Error fetching instance groups: ${error.message}`);
+    }
+
+    // Transform the result into a mapping of instanceId -> groupName
+    const instanceGroups: Record<string, string> = {};
+    data.forEach(({ instance_id, group_name }) => {
+      if (group_name) {
+        instanceGroups[instance_id] = group_name;
+      }
+    });
+
+    return instanceGroups;
+  } catch (error) {
+    console.error("Error in getInstanceGroups:", error);
+    return {};
+  }
+};

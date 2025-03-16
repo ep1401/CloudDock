@@ -619,6 +619,61 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error setting group downtime: ${error}`);
                         }
                         break;
+                    case "deleteGroupDowntime":
+                        console.log(`🔹 Received deleteGroupDowntime request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in deleteGroupDowntime request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        // ✅ Retrieve user session based on provider
+                        const userIdDeleteDowntime = userSession[provider];
+
+                        if (!userIdDeleteDowntime) {
+                            console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                            window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                            return;
+                        }
+
+                        // ✅ Validate required parameters
+                        if (!payload || !payload.groupName) {
+                            console.warn("❌ Invalid downtime delete request: Missing group name.");
+                            window.showErrorMessage("Missing required details for deleting group downtime.");
+                            return;
+                        }
+
+                        const groupNameDel = payload.groupName;
+
+                        console.log(`📤 Deleting downtime for ${provider.toUpperCase()} group '${groupNameDel}'.`);
+                        window.showInformationMessage(`Deleting downtime for group '${groupNameDel}'.`);
+
+                        try {
+                            // ✅ Call the general `removeGroupDowntime` function in CloudManager
+                            const success = await this.cloudManager.removeGroupDowntime(groupNameDel);
+
+                            if (!success) {
+                                console.warn(`⚠️ No downtime found for group '${groupNameDel}', or deletion failed.`);
+                                window.showErrorMessage(`No downtime found for group '${groupNameDel}', or deletion failed.`);
+                                return;
+                            }
+
+                            console.log(`✅ Successfully removed downtime for ${provider.toUpperCase()} group '${groupNameDel}'.`);
+
+                            // ✅ Notify the webview about the deleted downtime
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeDeleted",
+                                provider,
+                                groupNameDel,
+                                userId: userIdDeleteDowntime
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error deleting downtime for group '${groupNameDel}' for ${provider.toUpperCase()} user ${userIdDeleteDowntime}:`, error);
+                            window.showErrorMessage(`Error deleting group downtime: ${error}`);
+                        }
+                        break;
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -831,9 +886,12 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 // Get group name and shutdown schedule
                                 const groupName = instance.groupName ? instance.groupName : "N/A";
-                                const shutdownSchedule = instance.shutdownSchedule && instance.shutdownSchedule !== "N/A"
-                                    ? instance.shutdownSchedule
-                                    : "No schedule set";
+                                let shutdownSchedule = instance.shutdownSchedule;
+    
+                                // Ensure that if it's "N/A | N/A", it just shows "N/A"
+                                if (!shutdownSchedule || shutdownSchedule === "N/A" || shutdownSchedule.trim() === "N/A | N/A") {
+                                    shutdownSchedule = "N/A";
+                                }
 
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
@@ -888,6 +946,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // Shutdown Schedule column
                             const shutdownCell = newRow.insertCell(5);
                             shutdownCell.textContent = "N/A";
+                        }
+                        if (message.type === "groupDowntimeDeleted") {
+                            console.log("✅ Downtime deleted for group:", message.groupNameDel);
+
+                            const { groupNameDel } = message;
+
+                            // ✅ Update the shutdown schedule in the instances table
+                            const rows = document.querySelectorAll("#instancesTable tbody tr");
+
+                            rows.forEach(row => {
+                                const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
+                                const shutdownCell = row.cells[5]; // Assuming shutdown schedule is in the 5th column
+
+                                if (groupNameCell && groupNameCell.textContent.trim() === groupNameDel) {
+                                    shutdownCell.textContent = "N/A"; // ✅ Reset to N/A
+                                }
+                            });
                         }
                         if (message.type === "updateSubscriptions") {
                             console.log("✅ Received subscriptions:", message.subscriptions);

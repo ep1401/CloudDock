@@ -385,6 +385,25 @@ export class CloudManager {
             window.showErrorMessage(`❌ Error setting downtime: ${error}`);
         }
     }
+    async removeGroupDowntime(groupName: string): Promise<boolean> {
+        try {
+            console.log(`📤 Removing downtime for group: '${groupName}'`);
+    
+            // ✅ Call the database function to remove downtime for the given group
+            const success = await database.removeGroupDowntime(groupName);
+    
+            if (success) {
+                console.log(`✅ Successfully removed downtime for group '${groupName}'.`);
+            } else {
+                console.warn(`⚠️ No downtime found for group '${groupName}', or deletion failed.`);
+            }
+    
+            return success;
+        } catch (error) {
+            console.error("❌ Error in removeGroupDowntime:", error);
+            return false;
+        }
+    }    
 }
 
 

@@ -492,3 +492,42 @@ export const getGroupDowntime = async (groupName: string) => {
       return { startTime: "N/A", endTime: "N/A" }; // Return "N/A" on error
   }
 };
+
+export const removeGroupDowntime = async (groupName: string): Promise<boolean> => {
+  try {
+      // ✅ Step 1: Retrieve the group ID based on the group name
+      const { data: groupData, error: groupError } = await supabase
+          .from("instance_groups")
+          .select("group_id")
+          .eq("group_name", groupName)
+          .maybeSingle();
+
+      if (groupError) {
+          throw new Error(`Error retrieving group ID: ${groupError.message}`);
+      }
+
+      if (!groupData) {
+          console.warn(`⚠️ No group found with name '${groupName}'.`);
+          return false;
+      }
+
+      const groupId = groupData.group_id;
+
+      // ✅ Step 2: Delete the row from the group_downtime table
+      const { error: deleteError } = await supabase
+          .from("group_downtime")
+          .delete()
+          .eq("group_id", groupId);
+
+      if (deleteError) {
+          throw new Error(`Error deleting downtime: ${deleteError.message}`);
+      }
+
+      console.log(`✅ Successfully removed downtime for group '${groupName}'.`);
+      return true; // Successfully deleted
+
+  } catch (error) {
+      console.error("❌ Error removing group downtime:", error);
+      return false; // Return false if an error occurred
+  }
+};

@@ -332,3 +332,70 @@ export const removeInstancesFromGroup = async (
       throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
+export const getUserGroups = async (
+  awsId: string | null,
+  azureId: string | null
+): Promise<{ awsGroups: string[]; azureGroups: string[] }> => {
+  try {
+      let awsGroups: string[] = [];
+      let azureGroups: string[] = [];
+
+      // ✅ Fetch AWS group names if awsId is provided
+      if (awsId) {
+          const { data: awsData, error: awsError } = await supabase
+              .from("aws_sessions")
+              .select("group_ids")
+              .eq("aws_id", awsId)
+              .maybeSingle();
+
+          if (awsError) {
+              throw new Error(`Error fetching AWS groups: ${awsError.message}`);
+          }
+
+          if (awsData?.group_ids?.length) {
+              const { data: groupNames, error: groupError } = await supabase
+                  .from("instance_groups")
+                  .select("group_name")
+                  .in("group_id", awsData.group_ids);
+
+              if (groupError) {
+                  throw new Error(`Error retrieving AWS group names: ${groupError.message}`);
+              }
+
+              awsGroups = groupNames.map(g => g.group_name);
+          }
+      }
+
+      // ✅ Fetch Azure group names if azureId is provided
+      if (azureId) {
+          const { data: azureData, error: azureError } = await supabase
+              .from("azure_sessions")
+              .select("group_ids")
+              .eq("azure_id", azureId)
+              .maybeSingle();
+
+          if (azureError) {
+              throw new Error(`Error fetching Azure groups: ${azureError.message}`);
+          }
+
+          if (azureData?.group_ids?.length) {
+              const { data: groupNames, error: groupError } = await supabase
+                  .from("instance_groups")
+                  .select("group_name")
+                  .in("group_id", azureData.group_ids);
+
+              if (groupError) {
+                  throw new Error(`Error retrieving Azure group names: ${groupError.message}`);
+              }
+
+              azureGroups = groupNames.map(g => g.group_name);
+          }
+      }
+
+      return { awsGroups, azureGroups };
+  } catch (error) {
+      console.error("❌ Error in getUserGroups:", error);
+      throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};

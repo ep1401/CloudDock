@@ -41,9 +41,13 @@ export class CloudManager {
                 console.log(`🔹 Fetched AWS Key Pairs for ${userAccountId}:`, keyPairs);
 
                 const ec2instances = await this.awsManager.fetchAllEC2InstancesAcrossRegions(userAccountId);
+
+                const usergroups = await database.getUserGroups(userAccountId, null);
+
+                console.log('usergroups value: ' + usergroups.awsGroups);
             
                 // ✅ Return the userAccountId and keyPairs
-                return { userAccountId, keyPairs, ec2instances };
+                return { userAccountId, keyPairs, ec2instances, usergroups };
             
             } catch (error) {
                 console.error(`❌ AWS Authentication or Key Pair retrieval failed:`, error);

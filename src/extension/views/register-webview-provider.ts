@@ -75,6 +75,12 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { ec2instances } = result;
                                             this.postMessage(webviewId, { type: "updateInstances", instances: ec2instances, userId });
                                         }
+                                        if ('usergroups' in result) {
+                                            const { usergroups } = result;
+                                            const { awsGroups } = usergroups;
+                                            console.log("awsgroup:", awsGroups);
+                                            this.postMessage(webviewId, { type: "updateGroupsAWS", awsGroups, userId });
+                                        }
                                      } else if (provider === "azure") {
                                         if ("subscriptions" in result && Array.isArray(result.subscriptions)) {
                                             console.log("🔑 Sending subscriptions to UI:", result.subscriptions);
@@ -895,6 +901,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     }
                                 });
                             });
+                        }
+                        if (message.type === "updateGroupsAWS") {
+                            console.log("✅ Received AWS user groups:", message.awsGroups);
+
+                            const groupSelect = document.getElementById("groupNameAws");
+                            groupSelect.innerHTML = ""; // Clear previous options
+
+                            if (!message.awsGroups || message.awsGroups.length === 0) {
+                                console.warn("⚠️ No AWS groups found.");
+                                groupSelect.innerHTML = "<option value=''>No groups found</option>";
+                            } else {
+                                message.awsGroups.forEach((group) => {
+                                    const option = document.createElement("option");
+                                    option.value = group;
+                                    option.textContent = group;
+                                    groupSelect.appendChild(option);
+                                });
+
+                                // ✅ Select the first available group automatically
+                                groupSelect.value = message.awsGroups[0];
+                            }
                         }
                     });
 

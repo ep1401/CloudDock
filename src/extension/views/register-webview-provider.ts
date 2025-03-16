@@ -2,7 +2,8 @@ import { CancellationToken, ExtensionContext, Uri, WebviewView, WebviewViewProvi
 import { CloudManager } from "./cloud/cloudManager";
 import * as fs from "fs";
 import * as path from "path";
-import { v4 as uuidv4 } from "uuid"; // Unique ID generator
+import { v4 as uuidv4 } from "uuid";
+import scheduler from "./backgroundScheduler";
 
 export function registerWebViewProvider(context: ExtensionContext) {
     const provider = new SidebarWebViewProvider(context.extensionUri, context);
@@ -10,7 +11,8 @@ export function registerWebViewProvider(context: ExtensionContext) {
 }
 
 export class SidebarWebViewProvider implements WebviewViewProvider {
-    private cloudManager: CloudManager = new CloudManager();
+    private cloudManager = CloudManager.getInstance();
+    private scheduler: typeof scheduler;
 
     // Map webview instances to their unique IDs
     private viewInstances: Map<string, WebviewView> = new Map();
@@ -18,7 +20,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
     // Map webview IDs to user accounts
     private userSessions: Map<string, Record<string, string>> = new Map(); // Maps webviewId -> userId
 
-    constructor(private readonly _extensionUri: Uri, public extensionContext: ExtensionContext) {}
+    constructor(private readonly _extensionUri: Uri, public extensionContext: ExtensionContext) {
+        this.scheduler = scheduler;
+    }
 
     resolveWebviewView(webviewView: WebviewView, _context: WebviewViewResolveContext, _token: CancellationToken) {
         // Assign a unique ID to this webview

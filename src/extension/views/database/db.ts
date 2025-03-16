@@ -531,3 +531,94 @@ export const removeGroupDowntime = async (groupName: string): Promise<boolean> =
       return false; // Return false if an error occurred
   }
 };
+
+export const getAllGroupDowntimes = async () => {
+  try {
+      // ✅ Step 1: Define the expected type structure
+      type GroupDowntime = {
+          group_id: string;
+          start_time: string;
+          end_time: string;
+          instance_groups: { group_name: string } | null;
+      };
+
+      // ✅ Step 2: Retrieve all group downtimes with their group names
+      const { data, error } = await supabase
+          .from("group_downtime")
+          .select("group_id, start_time, end_time, instance_groups (group_name)")
+          .returns<GroupDowntime[]>(); // Explicit return type
+
+      // ✅ Step 3: Handle errors
+      if (error) {
+          throw new Error(`Error retrieving group downtimes: ${error.message}`);
+      }
+
+      // ✅ Step 4: If no data found, return an empty array
+      if (!data || data.length === 0) {
+          console.warn("⚠️ No group downtimes found.");
+          return [];
+      }
+
+      // ✅ Step 5: Ensure correct extraction of `group_name`
+      return data.map(downtime => ({
+          groupName: downtime.instance_groups?.group_name || "Unknown",
+          startTime: downtime.start_time,
+          endTime: downtime.end_time
+      }));
+
+  } catch (error) {
+      console.error("❌ Error retrieving all group downtimes:", error);
+      return []; // Return empty array if an error occurs
+  }
+};
+
+export const getInstancesByGroup = async (groupName: string) => {
+  try {
+      // ✅ Step 1: Retrieve the group ID based on the group name
+      const { data: groupData, error: groupError } = await supabase
+          .from("instance_groups")
+          .select("group_id")
+          .eq("group_name", groupName)
+          .maybeSingle();
+
+      if (groupError) {
+          throw new Error(`Error retrieving group ID: ${groupError.message}`);
+      }
+
+      if (!groupData) {
+          console.warn(`⚠️ No group found with name '${groupName}'.`);
+          return { awsInstances: [], azureInstances: [] };
+      }
+
+      const groupId = groupData.group_id;
+
+      // ✅ Step 2: Retrieve AWS instances associated with the group ID
+      const { data: awsInstances, error: awsError } = await supabase
+          .from("aws_instances")
+          .select("instance_id, aws_id")
+          .eq("group_id", groupId);
+
+      if (awsError) {
+          throw new Error(`Error retrieving AWS instances: ${awsError.message}`);
+      }
+
+      // ✅ Step 3: Retrieve Azure instances associated with the group ID
+      const { data: azureInstances, error: azureError } = await supabase
+          .from("azure_instances")
+          .select("instance_id, azure_id")
+          .eq("group_id", groupId);
+
+      if (azureError) {
+          throw new Error(`Error retrieving Azure instances: ${azureError.message}`);
+      }
+
+      console.log(`✅ Retrieved ${awsInstances.length} AWS instances and ${azureInstances.length} Azure instances for group '${groupName}'.`);
+      return { awsInstances: awsInstances || [], azureInstances: azureInstances || [] };
+
+  } catch (error) {
+      console.error("❌ Error retrieving instances by group:", error);
+      return { awsInstances: [], azureInstances: [] }; // Return empty lists on error
+  }
+};
+
+

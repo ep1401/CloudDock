@@ -4,8 +4,28 @@ import { CancellationToken, ExtensionContext, Uri, WebviewView, WebviewViewProvi
 import * as database from "../database/db";
 
 export class CloudManager {
+    private static instance: CloudManager;
     private awsManager = new AWSManager();
     private azureManager = new AzureManager();
+
+    private constructor() {} // Prevents external instantiation
+
+    // ✅ Ensure a single instance exists
+    public static getInstance(): CloudManager {
+        if (!CloudManager.instance) {
+            CloudManager.instance = new CloudManager();
+        }
+        return CloudManager.instance;
+    }
+
+    // ✅ Getters for AWSManager and AzureManager
+    public getAWSManager() {
+        return this.awsManager;
+    }
+
+    public getAzureManager() {
+        return this.azureManager;
+    }
 
     /**
      * Handles authentication for AWS or Azure.

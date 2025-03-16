@@ -309,4 +309,12 @@ export class AzureManager {
     async fetchInstances(userId: string) {
         return "hello";
     }
+
+    async shutdownInstances(userId: string, instanceIds: string[]) {
+        return "hello";
+    }
+
+    async startInstances(userId: string, instanceIds: string[]) {
+        return "hello";
+    }
 }

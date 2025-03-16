@@ -338,5 +338,53 @@ export class CloudManager {
             console.error("❌ Error removing instances from group:", error);
             return null;
         }
-    }   
+    }
+    async setGroupDowntime(provider: "aws" | "azure" | "both", userId: string, groupName: string) {
+        try {
+            // ✅ Prompt user for start time
+            const startTime = await this.promptForInput("Enter Start Time", "YYYY-MM-DD HH:MM");
+            if (!startTime) {
+                window.showErrorMessage("❌ Downtime setting canceled: No start time provided.");
+                return;
+            }
+    
+            // ✅ Prompt user for end time
+            const endTime = await this.promptForInput("Enter End Time", "YYYY-MM-DD HH:MM");
+            if (!endTime) {
+                window.showErrorMessage("❌ Downtime setting canceled: No end time provided.");
+                return;
+            }
+    
+            // ✅ Validate time format
+            const startDate = new Date(startTime);
+            const endDate = new Date(endTime);
+    
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                window.showErrorMessage("❌ Invalid date format. Please enter a valid datetime in 'YYYY-MM-DD HH:MM' format.");
+                return;
+            }
+    
+            if (endDate <= startDate) {
+                window.showErrorMessage("❌ End time must be after start time.");
+                return;
+            }
+    
+            console.log(`📩 Setting downtime for ${provider.toUpperCase()} group: "${groupName}" from ${startTime} to ${endTime}.`);
+    
+            // ✅ Call the database function to update downtime
+            const result = await database.updateGroupDowntime(groupName, startTime, endTime);
+    
+            // ✅ Provide feedback to the user
+            window.showInformationMessage(`✅ Downtime set for group "${groupName}" from ${startTime} to ${endTime}.`);
+            console.log(result);
+
+            return { startTime, endTime };
+    
+        } catch (error) {
+            console.error("❌ Error setting downtime:", error);
+            window.showErrorMessage(`❌ Error setting downtime: ${error}`);
+        }
+    }
 }
+
+

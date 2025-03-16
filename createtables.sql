@@ -34,3 +34,12 @@ CREATE TABLE azure_instances (
     group_id UUID REFERENCES instance_groups(group_id),  -- Assigns the instance to a group
     group_name TEXT NOT NULL  -- Stores the group name directly
 );
+
+-- Stores scheduled downtime for instance groups
+CREATE TABLE group_downtime (
+    group_id UUID PRIMARY KEY REFERENCES instance_groups(group_id) ON DELETE CASCADE, -- Associates downtime with a specific group
+    start_time TIMESTAMP NOT NULL, -- Start time of the scheduled downtime
+    end_time TIMESTAMP NOT NULL, -- End time of the scheduled downtime
+    CHECK (end_time > start_time) -- Ensures end time is after start time
+);
+

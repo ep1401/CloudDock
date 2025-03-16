@@ -522,7 +522,7 @@ export class AWSManager {
     * Retrieves all EC2 instances associated with the user.
     * @param userId Unique user identifier.
     */
-    async fetchAllEC2InstancesAcrossRegions(userId: string) {
+   async fetchAllEC2InstancesAcrossRegions(userId: string) {
         const userSession = this.userSessions.get(userId);
 
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
@@ -535,9 +535,18 @@ export class AWSManager {
 
         const regions = ["us-east-2", "us-west-1", "us-west-2", "eu-west-1"];
         
-        let allInstances: { instanceId: string, instanceType: string, state: string, region: string, groupName: string | null }[] = [];
+        let allInstances = [];
 
-        const fetchInstances = async (region: string) => {
+        interface Instance {
+            instanceId: string;
+            instanceType: string;
+            state: string;
+            region: string;
+            groupName: string | null;
+            shutdownSchedule: string;
+        }
+
+        const fetchInstances = async (region: string): Promise<Instance[]> => {
             const ec2 = new AWS.EC2({
                 accessKeyId: userSession.awsConfig?.credentials?.accessKeyId ?? '',
                 secretAccessKey: userSession.awsConfig?.credentials?.secretAccessKey ?? '',
@@ -549,13 +558,14 @@ export class AWSManager {
                 console.log(`🔹 Fetching instances from region: ${region}`);
                 const instancesData = await ec2.describeInstances().promise();
 
-                const instances = instancesData.Reservations?.flatMap(reservation =>
+                const instances: Instance[] = instancesData.Reservations?.flatMap(reservation =>
                     reservation.Instances?.map(instance => ({
                         instanceId: instance.InstanceId ?? "N/A",
                         instanceType: instance.InstanceType ?? "Unknown",
                         state: instance.State?.Name ?? "Unknown",
                         region: region,
-                        groupName: null // Add default value for groupName
+                        groupName: null, // Placeholder for group name
+                        shutdownSchedule: "N/A" // Default value
                     })) ?? []
                 ) || [];
 
@@ -581,13 +591,39 @@ export class AWSManager {
 
         console.log("instanceGroups:", instanceGroups);
 
-        // Map instance groups to instances
-        allInstances = allInstances.map(instance => ({
-            ...instance,
-            groupName: instanceGroups[instance.instanceId] || null
-        }));
+        // Fetch shutdown schedules
+        const groupNames = Object.values(instanceGroups).filter(name => name !== null); // Remove null values
+        const uniqueGroupNames = [...new Set(groupNames)]; // Remove duplicates
 
-        console.log(`✅ Updated instances with group names for user ${userId}`);
+        const groupDowntimes = await Promise.all(
+            uniqueGroupNames.map(async (groupName) => {
+                const downtime = await database.getGroupDowntime(groupName);
+                return { groupName, startTime: downtime.startTime, endTime: downtime.endTime };
+            })
+        );
+
+        console.log("groupDowntimes:", groupDowntimes);
+
+        // Convert to a lookup table
+        const downtimeMap = Object.fromEntries(
+            groupDowntimes.map(({ groupName, startTime, endTime }) => [groupName, `${startTime} | ${endTime}`])
+        );
+
+        console.log("groupDowntimes Map:", downtimeMap);
+
+        // Map instance groups and shutdown schedules to instances
+        allInstances = allInstances.map(instance => {
+            const groupName = instanceGroups[instance.instanceId] || "N/A";
+            const shutdownSchedule = groupName !== "N/A" ? (downtimeMap[groupName] !== "N/A - N/A" ? downtimeMap[groupName] : "N/A") : "N/A";
+
+            return {
+                ...instance,
+                groupName,
+                shutdownSchedule
+            };
+        });
+
+        console.log(`✅ Updated instances with group names and shutdown schedules for user ${userId}`);
 
         return allInstances;
     }

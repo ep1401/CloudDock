@@ -154,11 +154,16 @@
         </div>
         <br>
         <div class="action-group">
-            <label for="groupAction">Select Group:</label>
+            <label for="groupSelect">Select Group:</label>
             <select id="groupNameAws">
                 <option value="">Waiting...</option>
             </select>
-            <button id="downtimeaws">Schedule Downtime</button>
+            <select id="groupSelect">
+                <option value="setdownaws">Set Downtime</option>
+                <option value="viewdownaws">View Downtime</option>
+                <option value="deldownaws">Delete Downtime</option>
+            </select>
+            <button id="submitDownAction">Submit</button>
         </div>
     </div>
 

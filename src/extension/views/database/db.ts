@@ -399,3 +399,96 @@ export const getUserGroups = async (
       throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
+export const updateGroupDowntime = async (
+  groupName: string,
+  startTime: string,
+  endTime: string
+): Promise<string> => {
+  try {
+      // ✅ Step 1: Retrieve the group ID based on the group name
+      const { data: groupData, error: groupError } = await supabase
+          .from("instance_groups")
+          .select("group_id")
+          .eq("group_name", groupName)
+          .maybeSingle();
+
+      if (groupError) {
+          throw new Error(`Error retrieving group ID: ${groupError.message}`);
+      }
+
+      if (!groupData) {
+          throw new Error(`Group '${groupName}' does not exist.`);
+      }
+
+      const groupId = groupData.group_id;
+
+      // ✅ Step 2: Update or insert the group downtime
+      const { error: upsertError } = await supabase
+          .from("group_downtime")
+          .upsert(
+              [{
+                  group_id: groupId,
+                  start_time: startTime,
+                  end_time: endTime
+              }],
+              { onConflict: "group_id" } // Ensures existing downtime is updated
+          );
+
+      if (upsertError) {
+          throw new Error(`Error updating group downtime: ${upsertError.message}`);
+      }
+
+      return `✅ Downtime for group '${groupName}' successfully updated.`;
+  } catch (error) {
+      console.error("❌ Error in updateGroupDowntime:", error);
+      throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};
+
+export const getGroupDowntime = async (groupName: string) => {
+  try {
+      // ✅ Step 1: Retrieve the group ID based on the group name
+      const { data: groupData, error: groupError } = await supabase
+          .from("instance_groups")
+          .select("group_id")
+          .eq("group_name", groupName)
+          .maybeSingle();
+
+      if (groupError) {
+          throw new Error(`Error retrieving group ID: ${groupError.message}`);
+      }
+
+      if (!groupData) {
+          console.warn(`⚠️ No group found with name '${groupName}'.`);
+          return { startTime: "N/A", endTime: "N/A" };
+      }
+
+      const groupId = groupData.group_id;
+
+      // ✅ Step 2: Query the group_downtime table using the retrieved group ID
+      const { data: downtimeData, error: downtimeError } = await supabase
+          .from("group_downtime")
+          .select("start_time, end_time")
+          .eq("group_id", groupId)
+          .maybeSingle();
+
+      if (downtimeError) {
+          throw new Error(`Error retrieving downtime: ${downtimeError.message}`);
+      }
+
+      if (!downtimeData) {
+          console.warn(`⚠️ No scheduled downtime found for group '${groupName}'.`);
+          return { startTime: "N/A", endTime: "N/A" };
+      }
+
+      // ✅ Step 3: Return the retrieved downtime
+      return {
+          startTime: downtimeData.start_time ?? "N/A",
+          endTime: downtimeData.end_time ?? "N/A"
+      };
+  } catch (error) {
+      console.error("❌ Error retrieving group downtime:", error);
+      return { startTime: "N/A", endTime: "N/A" }; // Return "N/A" on error
+  }
+};

@@ -570,7 +570,55 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error removing instances: ${error}`);
                         }
                         break;
+                    case "setGroupDowntime":
+                        console.log(`🔹 Received setGroupDowntime request from webview ${webviewId}:`, data);
 
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in setGroupDowntime request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        // ✅ Retrieve user session based on provider
+                        const userIdSetDowntime = userSession[provider];
+
+                        if (!userIdSetDowntime) {
+                            console.error(`❌ No authenticated ${provider.toUpperCase()} user found. Please authenticate first.`);
+                            window.showErrorMessage(`Please authenticate with ${provider.toUpperCase()} first!`);
+                            return;
+                        }
+
+                        // ✅ Validate required parameters
+                        if (!payload || !payload.groupName) {
+                            console.warn("❌ Invalid downtime request: Missing group name.");
+                            window.showErrorMessage("Missing required details for setting group downtime.");
+                            return;
+                        }
+
+                        const { groupName } = payload;
+
+                        console.log(`📤 Setting downtime for ${provider.toUpperCase()} group '${groupName}'.`);
+                        window.showInformationMessage(`Setting downtime for group '${groupName}'.`);
+
+                        try {
+                            // ✅ Call the general `setGroupDowntime` function in CloudManager
+                            const time = await this.cloudManager.setGroupDowntime(provider, userIdSetDowntime, groupName);
+
+                            console.log(`✅ Successfully set downtime for ${provider.toUpperCase()} group '${groupName}'.`);
+
+                            // ✅ Notify the webview about the updated downtime
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeSet",
+                                provider,
+                                time, 
+                                groupName,
+                                userId: userIdSetDowntime
+                            });
+                        } catch (error) {
+                            console.error(`❌ Error setting downtime for group '${groupName}' for ${provider.toUpperCase()} user ${userIdSetDowntime}:`, error);
+                            window.showErrorMessage(`Error setting group downtime: ${error}`);
+                        }
+                        break;
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -780,14 +828,20 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             message.instances.forEach(instance => {
                                 const row = document.createElement("tr");
+
+                                // Get group name and shutdown schedule
                                 const groupName = instance.groupName ? instance.groupName : "N/A";
+                                const shutdownSchedule = instance.shutdownSchedule && instance.shutdownSchedule !== "N/A"
+                                    ? instance.shutdownSchedule
+                                    : "No schedule set";
+
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
                                     <td>\${instance.instanceId}</td>
                                     <td>\${instance.state}</td>
                                     <td>\${instance.region}</td>
                                     <td>\${groupName}</td>
-                                    <td>N/A</td> <!-- Shutdown schedule placeholder -->
+                                    <td>\${shutdownSchedule}</td>
                                 \`;
                                 tableBody.appendChild(row);
                             });
@@ -922,6 +976,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 // ✅ Select the first available group automatically
                                 groupSelect.value = message.awsGroups[0];
                             }
+                        }
+                        if (message.type === "groupDowntimeSet") {
+                            const { provider, time, groupName, userId } = message; 
+
+                            console.log("✅ Reached message downtime set:", message);
+
+                            // ✅ Update the shutdown schedule in the instances table
+                            const rows = document.querySelectorAll("#instancesTable tbody tr");
+                            rows.forEach(row => {
+                                const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
+                                const shutdownCell = row.cells[5]; // Assuming shutdown schedule is in the 5th column
+
+                                if (groupNameCell && groupNameCell.textContent.trim() === groupName) {
+                                    console.log("🔹 Start Time:", time.startTime, " | End Time:", time.endTime); // ✅ Debug log
+                                    shutdownCell.textContent = String(time.startTime) + " | " + String(time.endTime);
+                                }
+                            });
                         }
                     });
 
@@ -1064,6 +1135,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { instanceIds: selectedInstances }
                         });
                     });
+
                     document.getElementById("submitGroupAction").addEventListener("click", () => {
                         const selectedInstances = [];
                         console.log("🔹 Group action requested...");
@@ -1119,6 +1191,44 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             provider: "aws",
                             webviewId,
                             payload: { instanceIds: selectedInstances }
+                        });
+                    });
+                    document.getElementById("submitDownAction").addEventListener("click", () => {
+                        console.log("🔹 Downtime action requested...");
+
+                        // Get the selected group from the dropdown
+                        const selectedGroup = document.getElementById("groupNameAws").value;
+                        if (!selectedGroup) {
+                            alert("No group selected.");
+                            return;
+                        }
+
+                        // Get the selected action from the action dropdown
+                        const selectedAction = document.getElementById("groupSelect").value;
+                        let messageType = "";
+                        let actionMessage = "";
+
+                        switch (selectedAction) {
+                            case "setdownaws":
+                                messageType = "setGroupDowntime";
+                                break;
+                            case "viewdownaws":
+                                messageType = "viewGroupDowntime";
+                                break;
+                            case "deldownaws":
+                                messageType = "deleteGroupDowntime";
+                                break;
+                            default:
+                                alert("Invalid action selected.");
+                                return;
+                        }
+
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "aws",
+                            webviewId,
+                            payload: { groupName: selectedGroup }
                         });
                     });
 

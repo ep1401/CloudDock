@@ -85,6 +85,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             console.log("awsgroup:", awsGroups);
                                             this.postMessage(webviewId, { type: "updateGroupsAWS", awsGroups, userId });
                                         }
+                                        if ('cost' in result) {
+                                            const { cost } = result;
+                                            this.postMessage(webviewId, { type: "updateCosts", provider, cost, userId });
+                                        }
                                      } else if (provider === "azure") {
                                         if ("subscriptions" in result && Array.isArray(result.subscriptions)) {
                                             console.log("🔑 Sending subscriptions to UI:", result.subscriptions);
@@ -1072,6 +1076,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     shutdownCell.textContent = String(time.startTime) + " | " + String(time.endTime);
                                 }
                             });
+                        }
+                        if (message.type === "updateCosts") {
+                            const { provider, cost, userId } = message;
+
+                            document.getElementById("awsCost").textContent = "Month Cost: $" + cost;
                         }
                     });
 

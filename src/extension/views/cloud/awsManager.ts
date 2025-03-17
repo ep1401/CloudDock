@@ -803,4 +803,56 @@ export class AWSManager {
             window.showErrorMessage(`Error starting instances: ${error}`);
         }
     }  
+    async getTotalMonthlyCost(userAccountId: string) {
+        const session = this.getUserSession(userAccountId);
+        if (!session || !session.awsConfig) {
+            throw new Error("User session not found. Authenticate first.");
+        }
+    
+        // Initialize AWS Cost Explorer
+        const costExplorer = new AWS.CostExplorer({
+            region: "us-east-1", // Cost Explorer only runs in us-east-1
+            credentials: session.awsConfig.credentials,
+        });
+    
+        // Get the first day of the current month & today's date
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+        const params = {
+            TimePeriod: {
+                Start: firstDayOfMonth.toISOString().split("T")[0], // YYYY-MM-DD
+                End: today.toISOString().split("T")[0], // Today's date
+            },
+            Granularity: "MONTHLY", // Aggregate cost by month
+            Metrics: ["UnblendedCost"], // Get total cost without amortization
+        };
+    
+        try {
+            console.log(`🔹 Fetching total AWS cost for the current month`);
+    
+            const response = await costExplorer.getCostAndUsage(params).promise();
+    
+            // Extract total cost from response
+            let totalCost = 0;
+            if (response.ResultsByTime && response.ResultsByTime.length > 0) {
+                const amount = response.ResultsByTime[0].Total?.UnblendedCost?.Amount;
+                if (amount) {
+                    totalCost = parseFloat(amount);
+                }
+            }
+    
+            console.log(`✅ Total AWS Monthly Cost: $${totalCost.toFixed(2)}`);
+            
+            // Show message in VS Code UI
+            window.showInformationMessage(`AWS Monthly Cost: $${totalCost.toFixed(2)}`);
+    
+            return totalCost.toFixed(2);
+    
+        } catch (error) {
+            console.error("❌ Error retrieving AWS cost data:", error);
+            window.showErrorMessage(`Error retrieving AWS cost data: ${error}`);
+            throw new Error(`Failed to retrieve cost data: ${error}`);
+        }
+    }    
 }

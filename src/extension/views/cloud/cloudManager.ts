@@ -65,9 +65,13 @@ export class CloudManager {
                 const usergroups = await database.getUserGroups(userAccountId, null);
 
                 console.log('usergroups value: ' + usergroups.awsGroups);
+
+                const cost = await this.awsManager.getTotalMonthlyCost(userAccountId);
+
+                console.log('cost value: ' + cost);
             
                 // ✅ Return the userAccountId and keyPairs
-                return { userAccountId, keyPairs, ec2instances, usergroups };
+                return { userAccountId, keyPairs, ec2instances, usergroups, cost };
             
             } catch (error) {
                 console.error(`❌ AWS Authentication or Key Pair retrieval failed:`, error);

@@ -13,6 +13,7 @@ Resources:
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+        - "arn:aws:iam::aws:policy/AWSBillingReadOnlyAccess"
 
 Outputs:
   RoleARN:

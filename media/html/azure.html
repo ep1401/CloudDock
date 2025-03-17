@@ -109,10 +109,10 @@
             <thead>
                 <tr>
                     <th>Select</th>
-                    <th>VM ID</th>
-                    <th>VM Name</th>
+                    <th>Name</th>
                     <th>Status</th>
-                    <th>Resource Group</th>
+                    <th>Region</th>
+                    <th>Group</th>
                     <th>Shutdown Schedule</th>
                 </tr>
             </thead>
@@ -124,11 +124,46 @@
         </table>
     </div>
 
-    <div class="action-buttons">
-        <button id="createGroup">Create New Resource Group</button>
-        <button id="addToGroup">Add to Group</button>
-        <button id="removeFromGroup">Remove from Group</button>
-        <button id="shutdownVM">Shutdown VM</button>
+    <p id="azureCost" style="margin-top: 15px; font-weight: bold;">Month Cost: ...</p>
+    <!-- Action Buttons Below the Table -->
+    <div class="action-container">
+        <!-- Instance Actions -->
+        <button id="refreshazure">Refresh</button>
+        <br>
+        <br>
+        <div class="action-group">
+            <label for="instanceActionAzure">VM Actions:</label>
+            <select id="instanceActionAzure">
+                <option value="startazure">Start VM</option>
+                <option value="stopazure">Stop VM</option>
+                <option value="terminateazure">Terminate VM</option>
+            </select>
+            <button id="submitInstanceActionAzure">Submit</button>
+        </div>
+        <br>
+        <!-- Group Actions -->
+        <div class="action-group">
+            <label for="groupActionAzure">Group Actions:</label>
+            <select id="groupActionAzure">
+                <option value="createazure">Create Group</option>
+                <option value="addazure">Add to Group</option>
+                <option value="removeazure">Remove from Group</option>
+            </select>
+            <button id="submitGroupActionAzure">Submit</button>
+        </div>
+        <br>
+        <div class="action-group">
+            <label for="groupSelectAzure">Select Group:</label>
+            <select id="groupNameAzure">
+                <option value="">Waiting...</option>
+            </select>
+            <select id="groupSelectAzure">
+                <option value="setdownazure">Set Downtime</option>
+                <option value="viewdownazure">View Downtime</option>
+                <option value="deldownazure">Delete Downtime</option>
+            </select>
+            <button id="submitDownActionAzure">Submit</button>
+        </div>
     </div>
 </body>
 </html>

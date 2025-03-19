@@ -183,9 +183,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     // ✅ Notify the webview about the created instance
                                     this.postMessage(webviewId, {
                                         type: "instanceCreated",
-                                        instanceId: instanceId,
+                                        instanceId: instanceId.instanceId, 
+                                        instanceName: instanceId.instanceName, 
                                         userId: instanceUserId, 
-                                        region: payload.region 
+                                        region: payload.region, 
                                     });
 
                                 } catch (error) {
@@ -903,7 +904,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
-                                    <td>\${instance.instanceId}</td>
+                                    <td style="display: none;">\${instance.instanceId}</td>
+                                    <td>\${instance.instanceName || "N/A"}</td>
                                     <td>\${instance.state}</td>
                                     <td>\${instance.region}</td>
                                     <td>\${groupName}</td>
@@ -913,7 +915,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             });
                         }
                         if (message.type === "instanceCreated") {
-                            let instanceId = message.instanceId?.instanceId || JSON.stringify(message.instanceId);
+                            let instanceId = message.instanceId || "Unknown ID";
+                            let instanceName = message.instanceName || "N/A";
                             const region = message.region;
 
                             const table = document.getElementById("instancesTable").getElementsByTagName('tbody')[0];
@@ -937,22 +940,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // Instance ID column
                             const idCell = newRow.insertCell(1);
                             idCell.textContent = instanceId;
+                            idCell.style.display = "none";
+
+                            // Name column
+                            const name = newRow.insertCell(2);
+                            name.textContent = instanceName;
 
                             // Status column
-                            const statusCell = newRow.insertCell(2);
+                            const statusCell = newRow.insertCell(3);
                             statusCell.textContent = "running";
                             statusCell.classList.add("status-column");
 
                             // Region
-                            const regionCell = newRow.insertCell(3);
+                            const regionCell = newRow.insertCell(4);
                             regionCell.textContent = region;
 
                             // Group column
-                            const groupCell = newRow.insertCell(4);
+                            const groupCell = newRow.insertCell(5);
                             groupCell.textContent = "N/A";
 
                             // Shutdown Schedule column
-                            const shutdownCell = newRow.insertCell(5);
+                            const shutdownCell = newRow.insertCell(6);
                             shutdownCell.textContent = "N/A";
                         }
                         if (message.type === "groupDowntimeDeleted") {
@@ -964,8 +972,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const rows = document.querySelectorAll("#instancesTable tbody tr");
 
                             rows.forEach(row => {
-                                const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
-                                const shutdownCell = row.cells[5]; // Assuming shutdown schedule is in the 5th column
+                                const groupNameCell = row.cells[5]; // Assuming group name is in the 4th column
+                                const shutdownCell = row.cells[6]; // Assuming shutdown schedule is in the 5th column
 
                                 if (groupNameCell && groupNameCell.textContent.trim() === groupNameDel) {
                                     shutdownCell.textContent = "N/A"; // ✅ Reset to N/A
@@ -989,7 +997,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 rows.forEach(row => {
                                     const idCell = row.cells[1]; // Instance ID column
                                     if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[2]; // Status column
+                                        const statusCell = row.cells[3]; // Status column
                                         statusCell.textContent = "stopping"; // ✅ Update status
                                     }
                                 });
@@ -1004,7 +1012,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 rows.forEach(row => {
                                     const idCell = row.cells[1]; // Instance ID column
                                     if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[2]; // Status column
+                                        const statusCell = row.cells[3]; // Status column
                                         statusCell.textContent = "terminated"; // ✅ Set status
                                     }
                                 });
@@ -1019,7 +1027,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 rows.forEach(row => {
                                     const idCell = row.cells[1]; // Instance ID column
                                     if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[2]; // Status column
+                                        const statusCell = row.cells[3]; // Status column
                                         statusCell.textContent = "running"; // ✅ Update status
                                     }
                                 });
@@ -1033,7 +1041,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 rows.forEach(row => {
                                     const idCell = row.cells[1]; // Instance ID column
                                     if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
+                                        const groupNameCell = row.cells[5]; // Assuming group name is in the 4th column
                                         groupNameCell.textContent = groupname; // ✅ Update group name
                                     }
                                 });
@@ -1068,8 +1076,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // ✅ Update the shutdown schedule in the instances table
                             const rows = document.querySelectorAll("#instancesTable tbody tr");
                             rows.forEach(row => {
-                                const groupNameCell = row.cells[4]; // Assuming group name is in the 4th column
-                                const shutdownCell = row.cells[5]; // Assuming shutdown schedule is in the 5th column
+                                const groupNameCell = row.cells[5]; 
+                                const shutdownCell = row.cells[6]; 
 
                                 if (groupNameCell && groupNameCell.textContent.trim() === groupName) {
                                     console.log("🔹 Start Time:", time.startTime, " | End Time:", time.endTime); // ✅ Debug log

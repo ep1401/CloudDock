@@ -91,14 +91,15 @@ export class AWSManager {
        return match ? match[1] : null;
    }
 
-   /**
-    * Creates an AWS EC2 instance.
-    * @param userId Unique user identifier.
-    * @param params Parameters for instance creation.
-    */
-   async createInstance(userId: string, params: { keyPair?: string }) {
-        console.log(`🔹 Creating AWS Instance for user ${userId}...`);
-        
+    /**
+     * Creates an AWS EC2 instance with a specified name.
+     * @param userId Unique user identifier.
+     * @param params Parameters for instance creation.
+     * @param instanceName Name to assign to the instance.
+     */
+    async createInstance(userId: string, params: { keyPair?: string }, instanceName: string) {
+        console.log(`🔹 Creating AWS Instance for user ${userId} with name "${instanceName}"...`);
+
         const { keyPair } = params;
 
         if (!keyPair) {
@@ -160,7 +161,10 @@ export class AWSManager {
             TagSpecifications: [
                 {
                     ResourceType: "instance",
-                    Tags: [{ Key: "Project", Value: "DevTest" }]
+                    Tags: [
+                        { Key: "Name", Value: instanceName }, // ✅ Set instance name
+                        { Key: "Project", Value: "DevTest" }
+                    ]
                 }
             ],
             NetworkInterfaces: [
@@ -196,6 +200,7 @@ export class AWSManager {
                 // Notify frontend about the new instance
                 return {
                     instanceId,
+                    instanceName,
                     publicIp: publicIp || "No Public IP Yet",
                     userId
                 };
@@ -207,7 +212,8 @@ export class AWSManager {
             console.error(`❌ Error launching instance for user ${userId}:`, error);
             window.showErrorMessage(`Error launching instance: ${error}`);
         }
-   }
+    }
+
 
    private async getLatestAMI(userId: string, template: string): Promise<string | null> {
         const userSession = this.getUserSession(userId);
@@ -539,6 +545,7 @@ export class AWSManager {
 
         interface Instance {
             instanceId: string;
+            instanceName: string; // ✅ Added instance name
             instanceType: string;
             state: string;
             region: string;
@@ -561,6 +568,7 @@ export class AWSManager {
                 const instances: Instance[] = instancesData.Reservations?.flatMap(reservation =>
                     reservation.Instances?.map(instance => ({
                         instanceId: instance.InstanceId ?? "N/A",
+                        instanceName: instance.Tags?.find(tag => tag.Key === "Name")?.Value ?? "N/A", // ✅ Fetch instance name from Tags
                         instanceType: instance.InstanceType ?? "Unknown",
                         state: instance.State?.Name ?? "Unknown",
                         region: region,

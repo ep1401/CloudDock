@@ -114,10 +114,39 @@ export class CloudManager {
         sshKey?: string 
     }) {
         if (provider === "aws") {
-            return await this.awsManager.createInstance(userId, params);
+            const instanceName = await this.promptForInput(
+                "Instance Name",
+                "Enter Name for Instance (e.g., my-ec2-instance)"
+            );
+        
+            if (!instanceName) {
+                window.showErrorMessage("Instance name is required.");
+                return;
+            }
+
+            const instanceData = await this.awsManager.createInstance(userId, params, instanceName);
+            
+            if (!instanceData) {
+                throw new Error("Failed to create instance. Instance data is undefined.");
+            }
+        
+            return { 
+                instanceId: instanceData.instanceId, 
+                instanceName: instanceData.instanceName 
+            };
         } else if (provider === "azure") {
             if (!params.subscriptionId || !params.resourceGroup || !params.region || !params.sshKey) {
                 throw new Error("❌ Missing required parameters for Azure VM creation.");
+            }
+
+            const vmName = await this.promptForInput(
+                "VM Name",
+                "Enter Name for VM (e.g., my-azure-vm)"
+            );
+        
+            if (!vmName) {
+                window.showErrorMessage("IAM Role ARN is required.");
+                return;
             }
     
             console.log(`📤 Creating Azure VM for userId: ${userId} in region: ${params.region}, Subscription: ${params.subscriptionId}, Resource Group: ${params.resourceGroup}`);
@@ -128,11 +157,12 @@ export class CloudManager {
                     resourceGroup: params.resourceGroup,
                     region: params.region,
                     userId,
-                    sshKey: params.sshKey
+                    sshKey: params.sshKey,
+                    vmName
                 });
     
                 console.log(`✅ Azure VM created successfully. VM ID: ${vmId}`);
-                return vmId;
+                return {vmId, vmName};
     
             } catch (error) {
                 console.error("❌ Error creating Azure VM:", error);

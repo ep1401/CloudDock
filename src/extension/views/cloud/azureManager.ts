@@ -152,12 +152,17 @@ export class AzureManager {
      * @param userId Unique ID for Azure session.
      * @param params Instance parameters (resourceGroupName, vmName, groupId).
      */
+        /**
+     * Creates a new Azure virtual machine instance with a public IP address.
+     * @param params Instance parameters (subscriptionId, resourceGroup, region, userId, sshKey, vmName).
+     */
     async createInstance(params: {
         subscriptionId: string;
         resourceGroup: string;
         region: string;
         userId: string;
         sshKey: string;
+        vmName: string;
     }): Promise<string> {
         // Retrieve the authenticated session for the provided userId.
         const userSession = this.userSessions.get(params.userId);
@@ -173,27 +178,25 @@ export class AzureManager {
         // Generate unique names for resources.
         const timestamp = Date.now();
         const uniqueSuffix = timestamp.toString();
-        const vmName = `vm-${uniqueSuffix}`;
         const nicName = `nic-${uniqueSuffix}`;
         const vnetName = `vnet-${uniqueSuffix}`;
         const subnetName = `subnet-${uniqueSuffix}`;
         const nsgName = `nsg-${uniqueSuffix}`;
+        const publicIpName = `pip-${uniqueSuffix}`;
     
         // Create a Virtual Network with a Subnet.
         const vnetParams = {
             location: params.region,
             addressSpace: { addressPrefixes: ["10.0.0.0/16"] },
-            subnets: [
-                { name: subnetName, addressPrefix: "10.0.0.0/24" }
-            ]
+            subnets: [{ name: subnetName, addressPrefix: "10.0.0.0/24" }]
         };
         const vnetResult = await networkClient.virtualNetworks.beginCreateOrUpdateAndWait(
             params.resourceGroup,
             vnetName,
             vnetParams
         );
-        const subnet = vnetResult.subnets && vnetResult.subnets[0];
-        if (!subnet || !subnet.id) {
+        const subnet = vnetResult.subnets?.[0];
+        if (!subnet?.id) {
             throw new Error("Failed to retrieve subnet information from the virtual network.");
         }
     
@@ -220,13 +223,29 @@ export class AzureManager {
             nsgParams
         );
     
-        // Create a Network Interface that uses the subnet and NSG, with a dynamically allocated private IP.
+        // Create a Public IP Address.
+        const publicIpParams = {
+            location: params.region,
+            publicIPAllocationMethod: "Static"
+        };
+        const publicIpResult = await networkClient.publicIPAddresses.beginCreateOrUpdateAndWait(
+            params.resourceGroup,
+            publicIpName,
+            publicIpParams
+        );
+    
+        if (!publicIpResult?.id) {
+            throw new Error("Failed to create Public IP Address.");
+        }
+    
+        // Create a Network Interface with the public IP.
         const nicParams = {
             location: params.region,
             ipConfigurations: [
                 {
                     name: "ipconfig1",
                     subnet: { id: subnet.id },
+                    publicIPAddress: { id: publicIpResult.id },
                     privateIPAllocationMethod: "Dynamic"
                 }
             ],
@@ -238,6 +257,10 @@ export class AzureManager {
             nicParams
         );
     
+        if (!nicResult?.id) {
+            throw new Error("Failed to create Network Interface.");
+        }
+    
         // Create the Virtual Machine with the SSH key for secure access.
         const vmParams = {
             location: params.region,
@@ -245,7 +268,7 @@ export class AzureManager {
                 vmSize: "Standard_B1s"
             },
             osProfile: {
-                computerName: vmName,
+                computerName: params.vmName,
                 adminUsername: "azureuser",
                 linuxConfiguration: {
                     disablePasswordAuthentication: true,
@@ -279,20 +302,19 @@ export class AzureManager {
     
         const vmResult = await computeClient.virtualMachines.beginCreateOrUpdateAndWait(
             params.resourceGroup,
-            vmName,
+            params.vmName,
             vmParams
         );
     
         if (!vmResult.id) {
             throw new Error("Failed to create VM: VM ID is undefined.");
         }
-
+    
         vscode.window.showInformationMessage(`✅ Azure VM created successfully. VM ID: ${vmResult.id}`);
         return vmResult.id;
     }
-    
-    
-      
+     
+               
     /**
      * Stops an Azure virtual machine.
      * @param userId Unique ID for Azure session.

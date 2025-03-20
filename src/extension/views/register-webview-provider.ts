@@ -100,6 +100,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { resourceGroups } = result;
                                             this.postMessage(webviewId, { type: "updateResourceGroups", resourceGroups, userId });
                                         }
+                                        if ("vms" in result && Array.isArray(result.vms)) {
+                                            console.log("🖥 Sending VMs to UI:", result.vms);
+                                            const { vms } = result;
+                                            this.postMessage(webviewId, { type: "updateVMs", VMs: vms, userId });
+                                        }
                                     }
                                 }
                             } else {
@@ -914,6 +919,44 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 tableBody.appendChild(row);
                             });
                         }
+                        if (message.type === "updateVMs") {
+                            console.log("✅ Received VMs:", message.VMs);
+
+                            const tableBody = document.querySelector("#vmsTable tbody");
+                            tableBody.innerHTML = ""; // Clear existing rows
+
+                            if (!message.VMs || message.VMs.length === 0) {
+                                console.warn("⚠️ No VMs received.");
+                                tableBody.innerHTML = "<tr><td colspan='7' style='text-align:center; color: gray;'>No active VMs found.</td></tr>";
+                                return;
+                            }
+
+                            message.VMs.forEach(vm => {
+                                const row = document.createElement("tr");
+
+                                // Placeholder values for Group and Shutdown Schedule (modify as needed)
+                                const groupName = vm.groupName ? vm.groupName : "N/A";
+                                let shutdownSchedule = vm.shutdownSchedule || "N/A";
+
+                                // Ensure that if it's "N/A | N/A", it just shows "N/A"
+                                if (shutdownSchedule.trim() === "N/A | N/A") {
+                                    shutdownSchedule = "N/A";
+                                }
+
+                                row.innerHTML = \`
+                                    <td><input type="checkbox" /></td>
+                                    <td style="display: none;">\${vm.id}</td>
+                                    <td>\${vm.name || "N/A"}</td>
+                                    <td>\${vm.status}</td>
+                                    <td>\${vm.region}</td>
+                                    <td>"N/A"</td>
+                                    <td>"N/A"</td>
+                                \`;
+
+                                tableBody.appendChild(row);
+                            });
+                        }
+
                         if (message.type === "instanceCreated") {
                             let instanceId = message.instanceId || "Unknown ID";
                             let instanceName = message.instanceName || "N/A";

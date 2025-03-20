@@ -75,7 +75,7 @@ export class AzureManager {
             console.error(`❌ Error fetching resource groups for subscription ${subscriptionId}:`, error);
             return []; // Return an empty list to prevent crashes
         }
-    }    
+    }     
 
     /**
      * ✅ Handles authentication for Azure users.
@@ -130,14 +130,17 @@ export class AzureManager {
     
             // ✅ Store subscriptions and the first subscription's resource groups
             this.userSessions.set(session.account.id, { azureCredential, subscriptions });
-    
+
+            const vms = await this.getUserVMs(session.account.id);
+
             vscode.window.showInformationMessage(`✅ Logged in as ${session.account.label}`);
     
             // ✅ Return subscriptions and resource groups for the first subscription
             return {
                 userAccountId: session.account.id, // Unique Azure user ID
                 subscriptions,
-                resourceGroups
+                resourceGroups,
+                vms
             };
         } catch (error) {
             console.error("❌ Azure Authentication failed:", error);
@@ -313,7 +316,50 @@ export class AzureManager {
         vscode.window.showInformationMessage(`✅ Azure VM created successfully. VM ID: ${vmResult.id}`);
         return vmResult.id;
     }
-     
+
+    async getUserVMs(userId: string) {
+        const userSession = this.userSessions.get(userId);
+        if (!userSession || !userSession.azureCredential) {
+            throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
+        }
+        
+        const azureCredential = userSession.azureCredential;
+        const allowedRegions = ["eastus", "westus", "westeurope", "southeastasia"];
+        const vms: any[] = [];
+    
+        for (const subscription of userSession.subscriptions) {
+            const computeClient = new ComputeManagementClient(azureCredential, subscription.subscriptionId);
+    
+            for await (const vm of computeClient.virtualMachines.listAll()) {
+                if (!vm.id || !vm.name || !vm.location || !allowedRegions.includes(vm.location.toLowerCase())) {
+                    continue; // Skip invalid or disallowed region VMs
+                }
+    
+                const resourceGroup = vm.id.split("/")[4];
+    
+                try {
+                    const vmInstanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vm.name);
+    
+                    vms.push({
+                        id: vm.id,
+                        name: vm.name,
+                        status: vmInstanceView.statuses?.[1]?.displayStatus || "Unknown",
+                        region: vm.location
+                    });
+                } catch (error) {
+                    console.warn(`⚠️ Failed to retrieve instance view for VM ${vm.name}:`, error);
+                    vms.push({
+                        id: vm.id,
+                        name: vm.name,
+                        status: "Unknown (Error fetching status)",
+                        region: vm.location
+                    });
+                }
+            }
+        }
+    
+        return vms;
+    } 
                
     /**
      * Stops an Azure virtual machine.

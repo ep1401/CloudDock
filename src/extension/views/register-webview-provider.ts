@@ -171,7 +171,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 try {
                                     // ✅ Call `createInstance` for AWS
-                                    window.showInformationMessage('Creating AWS Instance');
+                                    window.showInformationMessage('Creating AWS Instance...');
                                     const instanceId = await this.cloudManager.createInstance(provider, instanceUserId, {
                                         keyPair: payload.keyPair,
                                         region: payload.region
@@ -210,7 +210,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 try {
                                     // ✅ Call `createInstance` for Azure
-                                    window.showInformationMessage('Creating Azure Instance');
+                                    window.showInformationMessage('Creating Azure VM... This may take a few minutes.');
                                     const vmId = await this.cloudManager.createInstance(provider, instanceUserId, {
                                         subscriptionId: payload.subscriptionId,
                                         resourceGroup: payload.resourceGroup,
@@ -228,9 +228,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                     // ✅ Notify the webview about the created instance
                                     this.postMessage(webviewId, {
-                                        type: "instanceCreated",
-                                        instanceId: vmId,
-                                        userId: instanceUserId,  
+                                        type: "vmCreated",
+                                        instanceId: vmId.instanceId,
+                                        instanceName: vmId.instanceName,
+                                        userId: instanceUserId,
+                                        region: payload.region,
+                                        status: "Creating",
+                                        subscriptionId: payload.subscriptionId,  
                                     });
 
                                 } catch (error) {
@@ -1177,6 +1181,78 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const shutdownCell = newRow.insertCell(6);
                             shutdownCell.textContent = "N/A";
                         }
+
+                        if (message.type === "vmCreated") {
+                            console.log("📩 Received instanceCreated message:", message);
+
+                            let instanceId = message.instanceId || "Unknown ID";
+                            let instanceName = message.instanceName || "N/A";
+                            let status = message.status || "creating";
+                            let subscriptionId = message.subscriptionId || "N/A";
+
+                            const tableBody = document.querySelector("#vmsTable tbody");
+
+                            // Remove the "No active VMs found" row if it exists
+                            const noVMsRow = tableBody.querySelector("tr td[colspan='7']");
+                            if (noVMsRow) {
+                                noVMsRow.parentElement.remove();
+                            }
+
+                            // Create a new row
+                            const newRow = document.createElement("tr");
+
+                            // Checkbox column
+                            const selectCell = document.createElement("td");
+                            const checkbox = document.createElement("input");
+                            checkbox.type = "checkbox";
+                            selectCell.appendChild(checkbox);
+                            selectCell.classList.add("checkbox-column");
+
+                            // Hidden VM ID column
+                            const idCell = document.createElement("td");
+                            idCell.textContent = instanceId;
+                            idCell.style.display = "none";
+
+                            // VM Name column
+                            const nameCell = document.createElement("td");
+                            nameCell.textContent = instanceName;
+
+                            // Status column
+                            const statusCell = document.createElement("td");
+                            statusCell.textContent = status;
+                            statusCell.classList.add("status-column");
+
+                            // Region column (Placeholder, assuming it's included in the message)
+                            const regionCell = document.createElement("td");
+                            regionCell.textContent = message.region || "N/A";
+
+                            // Group column (Placeholder, update as needed)
+                            const groupCell = document.createElement("td");
+                            groupCell.textContent = "N/A";
+
+                            // Shutdown Schedule column (Placeholder, update as needed)
+                            const shutdownCell = document.createElement("td");
+                            shutdownCell.textContent = "N/A";
+
+                            // Subscription ID column (Hidden)
+                            const subscriptionCell = document.createElement("td");
+                            subscriptionCell.textContent = subscriptionId;
+                            subscriptionCell.style.display = "N/A";
+
+                            // Append all cells to the new row
+                            newRow.appendChild(selectCell);
+                            newRow.appendChild(idCell);
+                            newRow.appendChild(nameCell);
+                            newRow.appendChild(statusCell);
+                            newRow.appendChild(regionCell);
+                            newRow.appendChild(groupCell);
+                            newRow.appendChild(shutdownCell);
+                            newRow.appendChild(subscriptionCell);
+
+                            // Append the new row to the table
+                            tableBody.appendChild(newRow);
+                        }
+
                         if (message.type === "groupDowntimeDeleted") {
                             console.log("✅ Downtime deleted for group:", message.groupNameDel);
 

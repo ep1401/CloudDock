@@ -1325,6 +1325,29 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
                         }
+                            if (message.type === "terminatedVMs") {
+                                const terminatedVMs = message.terminatedVMs;
+                                console.log("🛑 Removing terminated VMs from UI:", terminatedVMs);
+
+                                const tableBody = document.querySelector("#vmsTable tbody");
+
+                                terminatedVMs.forEach(vm => {
+                                    const rows = document.querySelectorAll("#vmsTable tbody tr");
+                                    rows.forEach(row => {
+                                        const idCell = row.cells[1]; // VM ID column
+                                        if (idCell && idCell.textContent.trim() === vm.vmId) {
+                                            row.remove(); // ✅ Remove the row from the table
+                                        }
+                                    });
+                                });
+
+                                // If no rows are left, display the "No active VMs found" message
+                                if (tableBody.children.length === 0) {
+                                    tableBody.innerHTML = "<tr><td colspan='7' style='text-align:center; color: gray;'>No active VMs found.</td></tr>";
+                                }
+
+                            }
+
                         if (message.type === "startedResources") {
                             const startedInstances = message.startedInstances;
                             console.log("🚀 Updating status for started instances:", startedInstances);

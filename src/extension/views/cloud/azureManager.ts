@@ -395,6 +395,60 @@ export class AzureManager {
         return stoppedVMs;
     }
 
+    async startVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
+        const userSession = this.userSessions.get(userId);
+        if (!userSession || !userSession.azureCredential) {
+            throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
+        }
+        
+        const azureCredential = userSession.azureCredential;
+        let startedVMs: { vmId: string; subscriptionId: string }[] = [];
+        
+        for (const { vmId, subscriptionId } of vms) {
+            try {
+                const vmDetails = vmId.split("/");
+                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
+                const vmName = vmDetails[8]; // Extracting VM name from VM ID
+    
+                console.log(`🚀 Starting VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
+                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+                await computeClient.virtualMachines.beginStartAndWait(resourceGroup, vmName);
+                startedVMs.push({ vmId, subscriptionId });
+            } catch (error) {
+                console.error(`❌ Failed to start VM with ID ${vmId}:`, error);
+            }
+        }
+    
+        return startedVMs;
+    }
+
+    async deleteVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
+        const userSession = this.userSessions.get(userId);
+        if (!userSession || !userSession.azureCredential) {
+            throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
+        }
+        
+        const azureCredential = userSession.azureCredential;
+        let deletedVMs: { vmId: string; subscriptionId: string }[] = [];
+        
+        for (const { vmId, subscriptionId } of vms) {
+            try {
+                const vmDetails = vmId.split("/");
+                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
+                const vmName = vmDetails[8]; // Extracting VM name from VM ID
+    
+                console.log(`🗑️ Deleting VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
+                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+                await computeClient.virtualMachines.beginDeleteAndWait(resourceGroup, vmName);
+                deletedVMs.push({ vmId, subscriptionId });
+            } catch (error) {
+                console.error(`❌ Failed to delete VM with ID ${vmId}:`, error);
+            }
+        }
+    
+        return deletedVMs;
+    }
+
     /**
      * Fetches all instances for an Azure user.
      * @param userId Unique ID for Azure session.

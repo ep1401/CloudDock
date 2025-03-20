@@ -173,11 +173,11 @@ export class AzureManager {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
         const azureCredential = userSession.azureCredential;
-    
+
         // Initialize management clients.
         const computeClient = new ComputeManagementClient(azureCredential, params.subscriptionId);
         const networkClient = new NetworkManagementClient(azureCredential, params.subscriptionId);
-    
+
         // Generate unique names for resources.
         const timestamp = Date.now();
         const uniqueSuffix = timestamp.toString();
@@ -186,8 +186,8 @@ export class AzureManager {
         const subnetName = `subnet-${uniqueSuffix}`;
         const nsgName = `nsg-${uniqueSuffix}`;
         const publicIpName = `pip-${uniqueSuffix}`;
-    
-        // Create a Virtual Network with a Subnet.
+
+        // Create a Virtual Network with a Subnet (await to get subnet ID)
         const vnetParams = {
             location: params.region,
             addressSpace: { addressPrefixes: ["10.0.0.0/16"] },
@@ -202,7 +202,7 @@ export class AzureManager {
         if (!subnet?.id) {
             throw new Error("Failed to retrieve subnet information from the virtual network.");
         }
-    
+
         // Create a Network Security Group with an SSH rule.
         const nsgParams = {
             location: params.region,
@@ -225,7 +225,7 @@ export class AzureManager {
             nsgName,
             nsgParams
         );
-    
+
         // Create a Public IP Address.
         const publicIpParams = {
             location: params.region,
@@ -236,11 +236,11 @@ export class AzureManager {
             publicIpName,
             publicIpParams
         );
-    
+
         if (!publicIpResult?.id) {
             throw new Error("Failed to create Public IP Address.");
         }
-    
+
         // Create a Network Interface with the public IP.
         const nicParams = {
             location: params.region,
@@ -259,11 +259,11 @@ export class AzureManager {
             nicName,
             nicParams
         );
-    
+
         if (!nicResult?.id) {
             throw new Error("Failed to create Network Interface.");
         }
-    
+
         // Create the Virtual Machine with the SSH key for secure access.
         const vmParams = {
             location: params.region,
@@ -302,20 +302,17 @@ export class AzureManager {
                 }
             }
         };
-    
-        const vmResult = await computeClient.virtualMachines.beginCreateOrUpdateAndWait(
+
+        // 🚀 Start VM creation asynchronously (non-blocking)
+        const vmPoller = await computeClient.virtualMachines.beginCreateOrUpdate(
             params.resourceGroup,
             params.vmName,
             vmParams
         );
-    
-        if (!vmResult.id) {
-            throw new Error("Failed to create VM: VM ID is undefined.");
-        }
-    
-        vscode.window.showInformationMessage(`✅ Azure VM created successfully. VM ID: ${vmResult.id}`);
-        return vmResult.id;
+
+        return params.vmName; // Returning the VM name immediately
     }
+
 
     async getUserVMs(userId: string) {
         const userSession = this.userSessions.get(userId);

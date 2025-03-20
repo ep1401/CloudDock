@@ -400,6 +400,37 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error refreshing AWS instances: ${error}`);
                         }
                         break;
+                    case "refreshazureinstances":
+                        console.log("📩 Received request to refresh Azure VMs");
+
+                        if (!userSession["azure"]) {
+                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with Azure first!");
+                            return;
+                        }
+
+                        const userIdAzureRef = userSession["azure"];
+
+                        try {
+                            // ✅ Call the function in CloudManager to fetch updated VMs
+                            window.showInformationMessage("Refreshing Azure VMs...");
+                            const updatedVMs = await this.cloudManager.refreshAzureInstances(userIdAzureRef);
+                            window.showInformationMessage("Azure Vms Updated");
+                            // ✅ Send the updated VM list back to the Webview
+                            this.postMessage(webviewId, { 
+                                type: "updateVMs", 
+                                VMs: updatedVMs, 
+                                userId: userIdAzureRef 
+                            });
+
+                            console.log("✅ Successfully refreshed Azure VMs");
+
+                        } catch (error) {
+                            console.error(`❌ Error refreshing Azure VMs for user ${userIdAzureRef}:`, error);
+                            window.showErrorMessage(`Error refreshing Azure VMs: ${error}`);
+                        }
+                        break;
+
                     case "terminateInstances":
                         console.log("📩 Received terminateInstances message:", data); // Debugging log
 
@@ -1359,6 +1390,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
 
                         console.log("📤 Sent refreshawsinstances message");
+                    });
+
+                    document.getElementById("refreshazure").addEventListener("click", () => {
+                        console.log("🔄 Refresh Azure VMs button clicked");
+
+                        // ✅ Send a message to VS Code extension
+                        vscode.postMessage({
+                            type: "refreshazureinstances",
+                            webviewId
+                        });
+
+                        console.log("📤 Sent refreshazureinstances message");
                     });
 
                     document.getElementById("submitInstanceAction").addEventListener("click", () => {

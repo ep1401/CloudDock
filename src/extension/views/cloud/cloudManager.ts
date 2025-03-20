@@ -279,6 +279,27 @@ export class CloudManager {
         }
     }
 
+    async refreshAzureInstances(userIdAzure: string) {
+        console.log(`🔄 Fetching latest Azure VMs for user ${userIdAzure}`);
+    
+        if (!userIdAzure) {
+            console.error("❌ No Azure user ID provided.");
+            throw new Error("Azure user ID is required to refresh VMs.");
+        }
+    
+        try {
+            // ✅ Call Azure Manager function to fetch instances
+            const vms = await this.azureManager.getUserVMs(userIdAzure);
+    
+            console.log(`✅ Retrieved ${vms.length} updated Azure VMs`);
+            return vms;
+    
+        } catch (error) {
+            console.error(`❌ Error retrieving Azure VMs for user ${userIdAzure}:`, error);
+            throw new Error(`Failed to refresh Azure VMs: ${error}`);
+        }
+    }    
+
     async terminateAWSInstances(userIdAWS: string, instanceIds: string[]) {
         console.log(`🗑️ Requesting termination of AWS instances for user ${userIdAWS}`);
     

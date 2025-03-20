@@ -1340,6 +1340,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
                         }
+                        if (message.type === "startedVMs") {
+                            const startedVMs = message.startedVMs;
+                            console.log("🚀 Updating status for started VMs:", startedVMs);
+
+                            startedVMs.forEach(vm => {
+                                const rows = document.querySelectorAll("#vmsTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // VM ID column
+                                    if (idCell && idCell.textContent.trim() === vm.vmId) {
+                                        const statusCell = row.cells[3]; // Status column
+                                        statusCell.textContent = "running"; 
+                                    }
+                                });
+                            });
+                        }
+
                         if (message.type === "groupCreated") {
                             const { provider, groupname, instances, userId } = message;
 

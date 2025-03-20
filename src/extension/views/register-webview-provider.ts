@@ -233,7 +233,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                         instanceName: vmId.instanceName,
                                         userId: instanceUserId,
                                         region: payload.region,
-                                        status: "Creating",
+                                        status: "creating",
                                         subscriptionId: payload.subscriptionId,  
                                     });
 
@@ -1117,11 +1117,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     shutdownSchedule = "N/A";
                                 }
 
+                                let statusText = (vm.status || "Unknown").split(" ").pop().trim();
+
                                 row.innerHTML = \`
                                     <td><input type="checkbox" /></td>
                                     <td style="display: none;">\${vm.id}</td>
                                     <td>\${vm.name || "N/A"}</td>
-                                    <td>\${vm.status}</td>
+                                    <td>\${statusText}</td>
                                     <td>\${vm.region}</td>
                                     <td>"N/A"</td>
                                     <td>"N/A"</td>
@@ -1289,6 +1291,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     if (idCell && idCell.textContent.trim() === instanceId) {
                                         const statusCell = row.cells[3]; // Status column
                                         statusCell.textContent = "stopping"; // ✅ Update status
+                                    }
+                                });
+                            });
+                        }
+                        if (message.type === "stoppedVMs") {
+                            const stoppedVMs = message.stoppedVMs;
+                            console.log("🔹 Updating UI for stopped VMs:", stoppedVMs);
+
+                            stoppedVMs.forEach(vm => {
+                                const rows = document.querySelectorAll("#vmsTable tbody tr");
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // VM ID column
+                                    if (idCell && idCell.textContent.trim() === vm.vmId) {
+                                        const statusCell = row.cells[3]; // Status column
+                                        statusCell.textContent = "stopped"; // ✅ Update status
                                     }
                                 });
                             });

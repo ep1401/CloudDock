@@ -336,35 +336,39 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAzure = userSession["azure"];
 
-                        // 🔥 Fix: Ensure `payload` exists and contains `vmIds`
-                        if (!payload || !payload.vmIds || !Array.isArray(payload.vmIds) || payload.vmIds.length === 0) {
+                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
                             console.warn("❌ Invalid shutdown request: No VM IDs provided.");
                             window.showErrorMessage("No VMs selected for shutdown.");
                             return;
                         }
 
-                        const vmIds = payload.vmIds;
+                        // Extract VM IDs and Subscription IDs
+                        const vmsToStop = payload.vms.map((vm: { vmId: string; subscriptionId: string }) => ({
+                            vmId: vm.vmId,
+                            subscriptionId: vm.subscriptionId
+                        }));                        
 
-                        console.log(`📤 Initiating shutdown for Azure VMs (User: ${userIdAzure}):`, vmIds);
-                        window.showInformationMessage(`Stopping ${vmIds.length} VM(s): ${vmIds.join(", ")}`);
+                        console.log(`📤 Initiating shutdown for Azure VMs (User: ${userIdAzure}):`, vmsToStop);
+                        window.showInformationMessage(`Stopping ${vmsToStop.length} VM(s)...`);
 
                         try {
-                            // ✅ Call `stopVMs` in `AzureManager`
-                            await this.cloudManager.stopVMs(userIdAzure, vmIds);
-                            console.log(`✅ Successfully initiated shutdown for VMs: ${vmIds.join(", ")}`);
+                            // ✅ Call `stopVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            await this.cloudManager.stopVMs(userIdAzure, vmsToStop);
+                            console.log(`✅ Successfully initiated shutdown for VMs:`, vmsToStop);
 
                             // ✅ Notify webview that VMs were stopped
                             this.postMessage(webviewId, { 
                                 type: "stoppedVMs", 
-                                stoppedVMs: vmIds, 
+                                stoppedVMs: vmsToStop, 
                                 userId: userIdAzure
                             });
+
                         } catch (error) {
                             console.error(`❌ Error shutting down VMs for user ${userIdAzure}:`, error);
                             window.showErrorMessage(`Error shutting down VMs: ${error}`);
                         }
                         break;
-
 
                     case "refreshawsinstances":
                         console.log("📩 Received request to refresh AWS instances");
@@ -993,6 +997,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     <td>\${vm.region}</td>
                                     <td>"N/A"</td>
                                     <td>"N/A"</td>
+                                    <td style="display: none;">\${vm.subscriptionId}</td>
                                 \`;
 
                                 tableBody.appendChild(row);
@@ -1330,8 +1335,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         checkboxes.forEach(checkbox => {
                             const row = checkbox.closest("tr"); // Find the row containing this checkbox
                             const vmId = row.cells[1].textContent.trim(); // Extract the VM ID from the second column
-                            if (vmId) {
-                                selectedVMs.push(vmId);
+                            const subscriptionId = row.cells[7].textContent.trim(); // Extract Subscription ID from the hidden column
+
+                            if (vmId && subscriptionId) {
+                                selectedVMs.push({ vmId, subscriptionId });
                             }
                         });
 
@@ -1361,15 +1368,16 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 alert("❌ Invalid action selected.");
                                 return;
                         }
-                        
+
                         // ✅ Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "azure",
                             webviewId,
-                            payload: { vmIds: selectedVMs }
+                            payload: { vms: selectedVMs } // Now sending an array of { vmId, subscriptionId }
                         });
                     });
+
 
 
                     document.getElementById("submitGroupAction").addEventListener("click", () => {

@@ -232,28 +232,31 @@ export class CloudManager {
         }
     }
 
-    async stopVMs(userIdAzure: string, vmIds: string[]) {
+    async stopVMs(userIdAzure: string, vms: { vmId: string; subscriptionId: string }[]) {
         if (!userIdAzure) {
             console.error("❌ No Azure user ID provided.");
             throw new Error("Azure user ID is required to stop VMs.");
         }
     
-        if (!vmIds || vmIds.length === 0) {
+        if (!vms || vms.length === 0) {
             console.error("❌ No VM IDs provided.");
-            throw new Error("At least one VM ID is required to stop VMs.");
+            throw new Error("At least one VM ID with a subscription ID is required to stop VMs.");
         }
     
-        console.log(`📤 Stopping VMs for Azure user ${userIdAzure}:`, vmIds);
+        console.log(`📤 Stopping VMs for Azure user ${userIdAzure}:`, vms);
     
         try {
-            // ✅ Call Azure Manager function (implemented in AzureManager.ts)
-            await this.azureManager.stopVMs(userIdAzure, vmIds);
-            console.log(`✅ Successfully initiated shutdown for VMs: ${vmIds.join(", ")}`);
+            for (const { vmId, subscriptionId } of vms) {
+                console.log(`🛑 Stopping VM: ${vmId} in Subscription: ${subscriptionId}`);
+                await this.azureManager.stopVMs(userIdAzure, [{ vmId, subscriptionId }]);
+            }
+            
+            console.log(`✅ Successfully initiated shutdown for VMs:`, vms);
         } catch (error) {
             console.error(`❌ Failed to stop VMs: ${error}`);
             throw new Error(`VM shutdown failed: ${error}`);
         }
-    }    
+    }     
 
     async refreshAWSInstances(userIdAWS: string) {
         console.log(`🔄 Fetching latest AWS instances for user ${userIdAWS}`);

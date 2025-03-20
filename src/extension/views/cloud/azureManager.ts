@@ -344,7 +344,8 @@ export class AzureManager {
                         id: vm.id,
                         name: vm.name,
                         status: vmInstanceView.statuses?.[1]?.displayStatus || "Unknown",
-                        region: vm.location
+                        region: vm.location,
+                        subscriptionId: subscription.subscriptionId
                     });
                 } catch (error) {
                     console.warn(`⚠️ Failed to retrieve instance view for VM ${vm.name}:`, error);
@@ -352,44 +353,42 @@ export class AzureManager {
                         id: vm.id,
                         name: vm.name,
                         status: "Unknown (Error fetching status)",
-                        region: vm.location
+                        region: vm.location,
+                        subscriptionId: subscription.subscriptionId
                     });
                 }
             }
         }
-    
+        
         return vms;
-    } 
+    }
 
     /**
      * Stops an Azure virtual machine.
      * @param userId Unique ID for Azure session.
      * @param instanceId The ID of the VM to be stopped.
      */
-    async stopVMs(userId: string, vmIds: string[]) {
+    async stopVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
         const userSession = this.userSessions.get(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
         
         const azureCredential = userSession.azureCredential;
-        let stoppedVMs: string[] = [];
+        let stoppedVMs: { vmId: string; subscriptionId: string }[] = [];
         
-        for (const subscription of userSession.subscriptions) {
-            const computeClient = new ComputeManagementClient(azureCredential, subscription.subscriptionId);
+        for (const { vmId, subscriptionId } of vms) {
+            try {
+                const vmDetails = vmId.split("/");
+                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
+                const vmName = vmDetails[8]; // Extracting VM name from VM ID
     
-            for (const vmId of vmIds) {
-                try {
-                    const vmDetails = vmId.split("/");
-                    const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
-                    const vmName = vmDetails[8]; // Extracting VM name from VM ID
-    
-                    console.log(`🛑 Stopping VM: ${vmName} in Resource Group: ${resourceGroup}`);
-                    await computeClient.virtualMachines.beginPowerOffAndWait(resourceGroup, vmName);
-                    stoppedVMs.push(vmName);
-                } catch (error) {
-                    console.error(`❌ Failed to stop VM with ID ${vmId}:`, error);
-                }
+                console.log(`🛑 Stopping VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
+                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+                await computeClient.virtualMachines.beginPowerOffAndWait(resourceGroup, vmName);
+                stoppedVMs.push({ vmId, subscriptionId });
+            } catch (error) {
+                console.error(`❌ Failed to stop VM with ID ${vmId}:`, error);
             }
         }
     

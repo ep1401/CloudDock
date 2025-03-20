@@ -1237,7 +1237,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // Subscription ID column (Hidden)
                             const subscriptionCell = document.createElement("td");
                             subscriptionCell.textContent = subscriptionId;
-                            subscriptionCell.style.display = "N/A";
+                            idCell.style.display = "none";
 
                             // Append all cells to the new row
                             newRow.appendChild(selectCell);

@@ -360,14 +360,40 @@ export class AzureManager {
     
         return vms;
     } 
-               
+
     /**
      * Stops an Azure virtual machine.
      * @param userId Unique ID for Azure session.
      * @param instanceId The ID of the VM to be stopped.
      */
-    async stopInstance(userId: string, instanceId: string) {
+    async stopVMs(userId: string, vmIds: string[]) {
+        const userSession = this.userSessions.get(userId);
+        if (!userSession || !userSession.azureCredential) {
+            throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
+        }
         
+        const azureCredential = userSession.azureCredential;
+        let stoppedVMs: string[] = [];
+        
+        for (const subscription of userSession.subscriptions) {
+            const computeClient = new ComputeManagementClient(azureCredential, subscription.subscriptionId);
+    
+            for (const vmId of vmIds) {
+                try {
+                    const vmDetails = vmId.split("/");
+                    const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
+                    const vmName = vmDetails[8]; // Extracting VM name from VM ID
+    
+                    console.log(`🛑 Stopping VM: ${vmName} in Resource Group: ${resourceGroup}`);
+                    await computeClient.virtualMachines.beginPowerOffAndWait(resourceGroup, vmName);
+                    stoppedVMs.push(vmName);
+                } catch (error) {
+                    console.error(`❌ Failed to stop VM with ID ${vmId}:`, error);
+                }
+            }
+        }
+    
+        return stoppedVMs;
     }
 
     /**

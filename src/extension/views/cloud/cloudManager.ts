@@ -173,21 +173,6 @@ export class CloudManager {
     }    
 
     /**
-     * Stops an instance on AWS or Azure.
-     * @param provider "aws" | "azure"
-     * @param userId Unique ID for AWS or Azure session.
-     * @param instanceId The ID of the instance to be stopped.
-     */
-    async stopInstance(provider: "aws" | "azure", userId: string, instanceId: string) {
-        if (provider === "aws") {
-            return await this.awsManager.stopInstance(userId, instanceId);
-        } else if (provider === "azure") {
-            return await this.azureManager.stopInstance(userId, instanceId);
-        }
-        throw new Error("Invalid provider specified.");
-    }
-
-    /**
      * Assigns an instance to a group for batch shutdowns.
      * @param provider "aws" | "azure"
      * @param userId Unique ID for AWS or Azure session.
@@ -246,6 +231,29 @@ export class CloudManager {
             throw new Error(`Instance shutdown failed: ${error}`);
         }
     }
+
+    async stopVMs(userIdAzure: string, vmIds: string[]) {
+        if (!userIdAzure) {
+            console.error("❌ No Azure user ID provided.");
+            throw new Error("Azure user ID is required to stop VMs.");
+        }
+    
+        if (!vmIds || vmIds.length === 0) {
+            console.error("❌ No VM IDs provided.");
+            throw new Error("At least one VM ID is required to stop VMs.");
+        }
+    
+        console.log(`📤 Stopping VMs for Azure user ${userIdAzure}:`, vmIds);
+    
+        try {
+            // ✅ Call Azure Manager function (implemented in AzureManager.ts)
+            await this.azureManager.stopVMs(userIdAzure, vmIds);
+            console.log(`✅ Successfully initiated shutdown for VMs: ${vmIds.join(", ")}`);
+        } catch (error) {
+            console.error(`❌ Failed to stop VMs: ${error}`);
+            throw new Error(`VM shutdown failed: ${error}`);
+        }
+    }    
 
     async refreshAWSInstances(userIdAWS: string) {
         console.log(`🔄 Fetching latest AWS instances for user ${userIdAWS}`);

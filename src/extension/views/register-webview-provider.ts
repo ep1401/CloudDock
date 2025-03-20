@@ -324,6 +324,48 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                         break;
 
+                    case "stopVMs":
+                        console.log("📩 Received stopVMs message:", data); // Debugging log
+
+                        // Ensure Azure user session exists
+                        if (!userSession["azure"]) {
+                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with Azure first!");
+                            return;
+                        }
+
+                        const userIdAzure = userSession["azure"];
+
+                        // 🔥 Fix: Ensure `payload` exists and contains `vmIds`
+                        if (!payload || !payload.vmIds || !Array.isArray(payload.vmIds) || payload.vmIds.length === 0) {
+                            console.warn("❌ Invalid shutdown request: No VM IDs provided.");
+                            window.showErrorMessage("No VMs selected for shutdown.");
+                            return;
+                        }
+
+                        const vmIds = payload.vmIds;
+
+                        console.log(`📤 Initiating shutdown for Azure VMs (User: ${userIdAzure}):`, vmIds);
+                        window.showInformationMessage(`Stopping ${vmIds.length} VM(s): ${vmIds.join(", ")}`);
+
+                        try {
+                            // ✅ Call `stopVMs` in `AzureManager`
+                            await this.cloudManager.stopVMs(userIdAzure, vmIds);
+                            console.log(`✅ Successfully initiated shutdown for VMs: ${vmIds.join(", ")}`);
+
+                            // ✅ Notify webview that VMs were stopped
+                            this.postMessage(webviewId, { 
+                                type: "stoppedVMs", 
+                                stoppedVMs: vmIds, 
+                                userId: userIdAzure
+                            });
+                        } catch (error) {
+                            console.error(`❌ Error shutting down VMs for user ${userIdAzure}:`, error);
+                            window.showErrorMessage(`Error shutting down VMs: ${error}`);
+                        }
+                        break;
+
+
                     case "refreshawsinstances":
                         console.log("📩 Received request to refresh AWS instances");
 
@@ -1274,6 +1316,61 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { instanceIds: selectedInstances }
                         });
                     });
+
+                    document.getElementById("submitInstanceActionAzure").addEventListener("click", () => {
+                        const selectedVMs = [];
+                        console.log("🔹 Azure VM action requested...");
+
+                        // Get the selected action from the dropdown
+                        const selectedAction = document.getElementById("instanceActionAzure").value;
+
+                        // Get all checked checkboxes in the VM table
+                        const checkboxes = document.querySelectorAll("#vmsTable tbody input[type='checkbox']:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
+                            const vmId = row.cells[1].textContent.trim(); // Extract the VM ID from the second column
+                            if (vmId) {
+                                selectedVMs.push(vmId);
+                            }
+                        });
+
+                        // Ensure at least one VM is selected
+                        if (selectedVMs.length === 0) {
+                            alert("⚠️ No VMs selected.");
+                            return;
+                        }
+
+                        let messageType = "";
+                        let actionMessage = "";
+
+                        switch (selectedAction) {
+                            case "startazure":
+                                messageType = "startVMs";
+                                actionMessage = "Starting Azure VMs...";
+                                break;
+                            case "stopazure":
+                                messageType = "stopVMs";
+                                actionMessage = "Stopping Azure VMs...";
+                                break;
+                            case "terminateazure":
+                                messageType = "terminateVMs";
+                                actionMessage = "Terminating Azure VMs...";
+                                break;
+                            default:
+                                alert("❌ Invalid action selected.");
+                                return;
+                        }
+                        
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "azure",
+                            webviewId,
+                            payload: { vmIds: selectedVMs }
+                        });
+                    });
+
 
                     document.getElementById("submitGroupAction").addEventListener("click", () => {
                         const selectedInstances = [];

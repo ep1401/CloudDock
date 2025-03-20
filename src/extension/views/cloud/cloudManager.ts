@@ -300,6 +300,32 @@ export class CloudManager {
         }
     }    
 
+    async deleteVMs(userIdAzure: string, vms: { vmId: string; subscriptionId: string }[]) {
+        if (!userIdAzure) {
+            console.error("❌ No Azure user ID provided.");
+            throw new Error("Azure user ID is required to delete VMs.");
+        }
+    
+        if (!vms || vms.length === 0) {
+            console.error("❌ No VM IDs provided.");
+            throw new Error("At least one VM ID with a subscription ID is required to delete VMs.");
+        }
+    
+        console.log(`📤 Deleting VMs for Azure user ${userIdAzure}:`, vms);
+    
+        try {
+            for (const { vmId, subscriptionId } of vms) {
+                console.log(`🗑️ Deleting VM: ${vmId} in Subscription: ${subscriptionId}`);
+                await this.azureManager.deleteVMs(userIdAzure, [{ vmId, subscriptionId }]);
+            }
+            
+            console.log(`✅ Successfully initiated deletion for VMs:`, vms);
+        } catch (error) {
+            console.error(`❌ Failed to delete VMs: ${error}`);
+            throw new Error(`VM deletion failed: ${error}`);
+        }
+    }    
+
     async startAWSInstances(userIdAWS: string, instanceIds: string[]) {
         console.log(`🚀 Requesting start of AWS instances for user ${userIdAWS}`);
     
@@ -323,6 +349,31 @@ export class CloudManager {
         } catch (error) {
             console.error(`❌ Error starting AWS instances for user ${userIdAWS}:`, error);
             throw new Error(`Failed to start AWS instances: ${error}`);
+        }
+    }    
+    async startVMs(userIdAzure: string, vms: { vmId: string; subscriptionId: string }[]) {
+        if (!userIdAzure) {
+            console.error("❌ No Azure user ID provided.");
+            throw new Error("Azure user ID is required to start VMs.");
+        }
+    
+        if (!vms || vms.length === 0) {
+            console.error("❌ No VM IDs provided.");
+            throw new Error("At least one VM ID with a subscription ID is required to start VMs.");
+        }
+    
+        console.log(`📤 Starting VMs for Azure user ${userIdAzure}:`, vms);
+    
+        try {
+            for (const { vmId, subscriptionId } of vms) {
+                console.log(`🚀 Starting VM: ${vmId} in Subscription: ${subscriptionId}`);
+                await this.azureManager.startVMs(userIdAzure, [{ vmId, subscriptionId }]);
+            }
+            
+            console.log(`✅ Successfully initiated start for VMs:`, vms);
+        } catch (error) {
+            console.error(`❌ Failed to start VMs: ${error}`);
+            throw new Error(`VM start failed: ${error}`);
         }
     }    
     async createGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {

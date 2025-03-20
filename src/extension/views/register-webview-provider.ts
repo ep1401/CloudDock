@@ -440,6 +440,52 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error terminating instances: ${error}`);
                         }
                         break;
+                    case "terminateVMs":
+                        console.log("📩 Received terminateVMs message:", data); // Debugging log
+
+                        // Ensure Azure user session exists
+                        if (!userSession["azure"]) {
+                            console.error("❌ No authenticated Azure user found. Please authenticate first!");
+                            window.showErrorMessage("Please authenticate with Azure first!");
+                            return;
+                        }
+
+                        const userIdAzureTer = userSession["azure"];
+
+                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
+                            console.warn("❌ Invalid termination request: No VM IDs provided.");
+                            window.showErrorMessage("No VMs selected for termination.");
+                            return;
+                        }
+
+                        // Extract VM IDs and Subscription IDs
+                        const vmsToTerminate = payload.vms.map((vm: { vmId: string; subscriptionId: string }) => ({
+                            vmId: vm.vmId,
+                            subscriptionId: vm.subscriptionId
+                        }));
+
+                        console.log(`📤 Initiating termination for Azure VMs (User: ${userIdAzureTer}):`, vmsToTerminate);
+                        window.showInformationMessage(`Terminating ${vmsToTerminate.length} VM(s)...`);
+
+                        try {
+                            // ✅ Call `deleteVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            await this.cloudManager.deleteVMs(userIdAzureTer, vmsToTerminate);
+                            console.log(`✅ Successfully initiated termination for VMs:`, vmsToTerminate);
+
+                            // ✅ Notify webview that VMs were terminated
+                            this.postMessage(webviewId, { 
+                                type: "terminatedVMs", 
+                                terminatedVMs: vmsToTerminate, 
+                                userId: userIdAzureTer
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error terminating VMs for user ${userIdAzureTer}:`, error);
+                            window.showErrorMessage(`Error terminating VMs: ${error}`);
+                        }
+                        break;
+
                     case "startInstances":
                         console.log("📩 Received startInstances message:", data); // Debugging log
 
@@ -480,6 +526,52 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error starting instances: ${error}`);
                         }
                         break;
+                    case "startVMs":
+                        console.log("📩 Received startVMs message:", data); // Debugging log
+
+                        // Ensure Azure user session exists
+                        if (!userSession["azure"]) {
+                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with Azure first!");
+                            return;
+                        }
+
+                        const userIdAzureStart = userSession["azure"];
+
+                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
+                            console.warn("❌ Invalid start request: No VM IDs provided.");
+                            window.showErrorMessage("No VMs selected for start.");
+                            return;
+                        }
+
+                        // Extract VM IDs and Subscription IDs
+                        const vmsToStart = payload.vms.map((vm: { vmId: string; subscriptionId: string }) => ({
+                            vmId: vm.vmId,
+                            subscriptionId: vm.subscriptionId
+                        }));
+
+                        console.log(`📤 Initiating start for Azure VMs (User: ${userIdAzureStart}):`, vmsToStart);
+                        window.showInformationMessage(`Starting ${vmsToStart.length} VM(s)...`);
+
+                        try {
+                            // ✅ Call `startVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            await this.cloudManager.startVMs(userIdAzureStart, vmsToStart);
+                            console.log(`✅ Successfully initiated start for VMs:`, vmsToStart);
+
+                            // ✅ Notify webview that VMs were started
+                            this.postMessage(webviewId, { 
+                                type: "startedVMs", 
+                                startedVMs: vmsToStart, 
+                                userId: userIdAzureStart
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error starting VMs for user ${userIdAzureStart}:`, error);
+                            window.showErrorMessage(`Error starting VMs: ${error}`);
+                        }
+                        break;
+
                     case "createGroup":
                         console.log(`🔹 Received createGroup request from webview ${webviewId}:`, data);
 
@@ -902,6 +994,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
 
                         if (message.type === "azureConnected") {
+                            console.log("✅ Azure connected: ", message)
                             document.getElementById("azureStatus").textContent = "Azure Status: Connected";
                             document.getElementById("azureStatus").className = "status-text connected";
                             document.getElementById("status-azure").textContent = "Azure Status: Connected";

@@ -109,6 +109,12 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { cost } = result;
                                             this.postMessage(webviewId, { type: "updateCostsAzure", provider, cost, userId });
                                         }
+                                        if ('usergroups' in result) {
+                                            const { usergroups } = result;
+                                            const { azureGroups } = usergroups;
+                                            console.log("awsgroup:", azureGroups);
+                                            this.postMessage(webviewId, { type: "updateGroupsAzure", azureGroups, userId });
+                                        }
                                     }
                                 }
                             } else {
@@ -1418,6 +1424,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 groupSelect.value = message.awsGroups[0];
                             }
                         }
+                        if (message.type === "updateGroupsAzure") {
+                            console.log("✅ Received Azure user groups:", message.azureGroups);
+
+                            const groupSelect = document.getElementById("groupNameAzure");
+                            groupSelect.innerHTML = ""; // Clear previous options
+
+                            if (!message.azureGroups || message.azureGroups.length === 0) {
+                                console.warn("⚠️ No Azure groups found.");
+                                groupSelect.innerHTML = "<option value=''>No groups found</option>";
+                            } else {
+                                message.azureGroups.forEach((group) => {
+                                    const option = document.createElement("option");
+                                    option.value = group;
+                                    option.textContent = group;
+                                    groupSelect.appendChild(option);
+                                });
+
+                                // ✅ Select the first available group automatically
+                                groupSelect.value = message.azureGroups[0];
+                            }
+                        }
                         if (message.type === "groupDowntimeSet") {
                             const { provider, time, groupName, userId } = message; 
 
@@ -1752,6 +1779,35 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { groupName: selectedGroup }
                         });
                     });
+                    document.getElementById("submitGroupActionAzure").addEventListener("click", () => {
+                        console.log("🔹 Azure group action requested...");
+
+                        const selectedAction = document.getElementById("groupActionAzure").value;
+                        let messageType = "";
+
+                        switch (selectedAction) {
+                            case "createazure":
+                                messageType = "createGroup";
+                                break;
+                            case "addazure":
+                                messageType = "addToGroup";
+                                break;
+                            case "removeazure":
+                                messageType = "removeFromGroup";
+                                break;
+                            default:
+                                alert("Invalid group action selected.");
+                                return;
+                        }
+
+                        // Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "azure",
+                            webviewId,
+                        });
+                    });
+
 
                 });
 

@@ -158,7 +158,7 @@ export class AzureManager {
             const [resourceGroupsList, vms, cost] = await Promise.all([
                 this.getResourceGroupsForSubscription("azure", session.account.id, firstSubId),
                 this.getUserVMs(session.account.id),
-                this.getMonthlyCost(session.account.id) // ← Now fetched in parallel
+                this.getMonthlyCost(session.account.id) 
             ]);
     
             vscode.window.showInformationMessage("Total cost: " + cost);

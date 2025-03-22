@@ -79,7 +79,13 @@ export class CloudManager {
             }
             
         } else if (provider === "azure") {
-            return await this.azureManager.authenticate();
+            const userinfo =  await this.azureManager.authenticate();
+            const usergroups = await database.getUserGroups(userinfo.userAccountId, null);
+            return {userAccountId: userinfo.userAccountId,
+                subscriptions: userinfo.subscriptions,
+                resourceGroups: userinfo.resourceGroups,
+                cost: userinfo.cost,
+                vms: userinfo.vms, usergroups};
         }
         throw new Error("Invalid provider specified.");
     }

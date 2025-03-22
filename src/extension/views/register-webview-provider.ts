@@ -105,6 +105,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { vms } = result;
                                             this.postMessage(webviewId, { type: "updateVMs", VMs: vms, userId });
                                         }
+                                        if ('cost' in result) {
+                                            const { cost } = result;
+                                            this.postMessage(webviewId, { type: "updateCostsAzure", provider, cost, userId });
+                                        }
                                     }
                                 }
                             } else {
@@ -1239,7 +1243,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // Subscription ID column (Hidden)
                             const subscriptionCell = document.createElement("td");
                             subscriptionCell.textContent = subscriptionId;
-                            idCell.style.display = "none";
+                            subscriptionCell.style.display = "none";
 
                             // Append all cells to the new row
                             newRow.appendChild(selectCell);
@@ -1435,6 +1439,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const { provider, cost, userId } = message;
 
                             document.getElementById("awsCost").textContent = "Month Cost: $" + cost;
+                        }
+                        if (message.type === "updateCostsAzure") {
+                            const { provider, cost, userId } = message;
+
+                            document.getElementById("azureCost").textContent = "Month Cost: " + cost;
                         }
                     });
 

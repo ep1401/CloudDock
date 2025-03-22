@@ -5,6 +5,7 @@ import { ComputeManagementClient } from "@azure/arm-compute";
 import { ResourceManagementClient } from "@azure/arm-resources";
 import { NetworkManagementClient } from "@azure/arm-network";
 import { SubscriptionClient } from "@azure/arm-subscriptions";
+import { ConsumptionManagementClient } from "@azure/arm-consumption";
 
 export class RefreshableVSCodeSessionCredential implements TokenCredential {
     private currentToken: AccessToken | null = null;
@@ -160,6 +161,9 @@ export class AzureManager {
                 this.getUserVMs(session.account.id)
             ]);
 
+            const cost = await this.getMonthlyCost(session.account.id);
+
+            vscode.window.showInformationMessage("Total cost: " + cost);
     
             const resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {
                 [firstSubId]: resourceGroupsList
@@ -171,6 +175,7 @@ export class AzureManager {
                 userAccountId: session.account.id,
                 subscriptions,
                 resourceGroups,
+                cost,
                 vms
             };
         } catch (error) {
@@ -508,4 +513,58 @@ export class AzureManager {
     async startInstances(userId: string, instanceIds: string[]) {
         return "hello";
     }
+
+    async getMonthlyCost(userId: string): Promise<string> {
+        try {
+            const userSession = this.userSessions.get(userId);
+            if (!userSession || !userSession.azureCredential || userSession.subscriptions.length === 0) {
+                throw new Error("❌ No valid Azure session or subscriptions found for user.");
+            }
+    
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+            const filter = `usageStart ge '${startDate}' and usageEnd lt '${endDate}'`;
+    
+            const costPromises = userSession.subscriptions.map(async ({ subscriptionId }) => {
+                const scope = `/subscriptions/${subscriptionId}`;
+                const consumptionClient = new ConsumptionManagementClient(userSession.azureCredential, subscriptionId);
+    
+                let subTotal = 0;
+    
+                try {
+                    for await (const item of consumptionClient.usageDetails.list(scope, { filter })) {
+                        if (
+                            item &&
+                            typeof item === "object" &&
+                            "costInUSD" in item &&
+                            typeof item.costInUSD === "number"
+                        ) {
+                            subTotal += item.costInUSD;
+                        }
+                    }
+    
+                    console.log(`✅ Retrieved cost for subscription ${subscriptionId}: $${subTotal.toFixed(2)}`);
+                    return subTotal;
+                } catch (subError) {
+                    if (subError instanceof Error) {
+                        console.warn(`⚠️ Skipping subscription ${subscriptionId} due to error:`, subError.message);
+                    } else {
+                        console.warn(`⚠️ Skipping subscription ${subscriptionId} due to unknown error:`, subError);
+                    }
+                    return 0; // fallback if this sub fails
+                }
+            });
+    
+            const costResults = await Promise.all(costPromises);
+            const totalCost = costResults.reduce((sum, cost) => sum + cost, 0);
+            const formattedCost = `$${totalCost.toFixed(2)}`;
+    
+            console.log(`💰 Total monthly cost across accessible subscriptions: ${formattedCost}`);
+            return formattedCost;
+        } catch (error) {
+            console.error("❌ Failed to retrieve monthly cost:", error);
+            return "Unavailable";
+        }
+    }          
 }

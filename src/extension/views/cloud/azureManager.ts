@@ -1,14 +1,42 @@
 import * as vscode from "vscode";
 import { DefaultAzureCredential } from "@azure/identity";
+import { AccessToken, TokenCredential } from "@azure/core-auth";
 import { ComputeManagementClient } from "@azure/arm-compute";
 import { ResourceManagementClient } from "@azure/arm-resources";
 import { NetworkManagementClient } from "@azure/arm-network";
 import { SubscriptionClient } from "@azure/arm-subscriptions";
 
+export class RefreshableVSCodeSessionCredential implements TokenCredential {
+    private currentToken: AccessToken | null = null;
+
+    constructor(private accountId: string) {}
+
+    async getToken(): Promise<AccessToken> {
+        if (!this.currentToken || this.currentToken.expiresOnTimestamp < Date.now()) {
+            const session = await vscode.authentication.getSession(
+                "microsoft",
+                ["https://management.azure.com/user_impersonation"],
+                { createIfNone: true }
+            );
+
+            if (!session) {
+                throw new Error("User must be logged in to Azure.");
+            }
+
+            this.currentToken = {
+                token: session.accessToken,
+                expiresOnTimestamp: Date.now() + 60 * 60 * 1000
+            };
+        }
+
+        return this.currentToken;
+    }
+}
+
 export class AzureManager {
     // ✅ Store both subscriptions and resource groups
     private userSessions: Map<string, { 
-        azureCredential: DefaultAzureCredential; 
+        azureCredential: TokenCredential; 
         subscriptions: { subscriptionId: string; displayName: string }[]; 
     }> = new Map();
 
@@ -29,7 +57,7 @@ export class AzureManager {
     /**
      * ✅ Helper Function: Fetches resource groups for a subscription
      */
-    private async fetchResourceGroups(azureCredential: DefaultAzureCredential, subscriptionId: string) {
+    private async fetchResourceGroups(azureCredential: TokenCredential, subscriptionId: string) {
         try {
             const resourceClient = new ResourceManagementClient(azureCredential, subscriptionId);
             const rgList = [];
@@ -84,7 +112,7 @@ export class AzureManager {
         try {
             vscode.window.showInformationMessage("🔑 Connecting to Azure...");
     
-            // Request Microsoft authentication session
+            // Step 1: Authenticate with VS Code's Microsoft session
             const session = await vscode.authentication.getSession(
                 "microsoft",
                 ["https://management.azure.com/user_impersonation"],
@@ -97,10 +125,10 @@ export class AzureManager {
     
             console.log("✅ Azure authentication successful:", session);
     
-            // Initialize Azure credentials
-            const azureCredential = new DefaultAzureCredential();
+            // Step 2: Use a fast credential based on the session token
+            const azureCredential = new RefreshableVSCodeSessionCredential(session.account.id);
     
-            // Fetch all subscription IDs and names
+            // Step 3: Fetch all subscriptions for this user
             const subscriptionClient = new SubscriptionClient(azureCredential);
             const subscriptionsList = await subscriptionClient.subscriptions.list();
             const subscriptions: { subscriptionId: string; displayName: string }[] = [];
@@ -120,7 +148,7 @@ export class AzureManager {
     
             console.log(`🔹 Retrieved Azure Subscriptions:`, subscriptions);
     
-            // ✅ Fetch resource groups for the first subscription (if available)
+            // Step 4: Preload resource groups for the first subscription
             let resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {};
             if (subscriptions.length > 0) {
                 const firstSubscriptionId = subscriptions[0].subscriptionId;
@@ -128,16 +156,16 @@ export class AzureManager {
                 console.log(`✅ Retrieved resource groups for first subscription: ${firstSubscriptionId}`, resourceGroups[firstSubscriptionId]);
             }
     
-            // ✅ Store subscriptions and the first subscription's resource groups
+            // Step 5: Cache session in memory
             this.userSessions.set(session.account.id, { azureCredential, subscriptions });
-
+    
+            // Step 6: Optionally fetch user's VMs
             const vms = await this.getUserVMs(session.account.id);
-
+    
             vscode.window.showInformationMessage(`✅ Logged in as ${session.account.label}`);
     
-            // ✅ Return subscriptions and resource groups for the first subscription
             return {
-                userAccountId: session.account.id, // Unique Azure user ID
+                userAccountId: session.account.id,
                 subscriptions,
                 resourceGroups,
                 vms

@@ -125,10 +125,10 @@ export class AzureManager {
     
             console.log("✅ Azure authentication successful:", session);
     
-            // Step 2: Use a fast credential based on the session token
+            // Step 2: Use fast credential from VS Code
             const azureCredential = new RefreshableVSCodeSessionCredential(session.account.id);
     
-            // Step 3: Fetch all subscriptions for this user
+            // Step 3: Fetch all subscriptions
             const subscriptionClient = new SubscriptionClient(azureCredential);
             const subscriptionsList = await subscriptionClient.subscriptions.list();
             const subscriptions: { subscriptionId: string; displayName: string }[] = [];
@@ -146,21 +146,24 @@ export class AzureManager {
                 throw new Error("No active Azure subscriptions found.");
             }
     
-            console.log(`🔹 Retrieved Azure Subscriptions:`, subscriptions);
+            console.log("🔹 Retrieved Azure Subscriptions:", subscriptions);
     
-            // Step 4: Preload resource groups for the first subscription
-            let resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {};
-            if (subscriptions.length > 0) {
-                const firstSubscriptionId = subscriptions[0].subscriptionId;
-                resourceGroups[firstSubscriptionId] = await this.getResourceGroupsForSubscription("azure", session.account.id, firstSubscriptionId);
-                console.log(`✅ Retrieved resource groups for first subscription: ${firstSubscriptionId}`, resourceGroups[firstSubscriptionId]);
-            }
+            // Step 4: Begin fetching resource groups and VMs in parallel (non-blocking)
+            const firstSubId = subscriptions[0].subscriptionId;
     
-            // Step 5: Cache session in memory
+            // Step 5: Cache credential and subscriptions right away
             this.userSessions.set(session.account.id, { azureCredential, subscriptions });
+
+            // Step 6: Start fetching VMs and resource groups in parallel
+            const [resourceGroupsList, vms] = await Promise.all([
+                this.getResourceGroupsForSubscription("azure", session.account.id, firstSubId),
+                this.getUserVMs(session.account.id)
+            ]);
+
     
-            // Step 6: Optionally fetch user's VMs
-            const vms = await this.getUserVMs(session.account.id);
+            const resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {
+                [firstSubId]: resourceGroupsList
+            };
     
             vscode.window.showInformationMessage(`✅ Logged in as ${session.account.label}`);
     
@@ -175,8 +178,7 @@ export class AzureManager {
             vscode.window.showErrorMessage(`Azure login failed: ${error}`);
             throw error;
         }
-    }
-    
+    }    
     
     /**
      * Creates a new Azure virtual machine instance.
@@ -347,46 +349,63 @@ export class AzureManager {
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
-        
+    
         const azureCredential = userSession.azureCredential;
-        const allowedRegions = ["eastus", "westus", "westeurope", "southeastasia"];
+        const allowedRegions = new Set(["eastus", "westus", "westeurope", "southeastasia"]);
         const vms: any[] = [];
     
-        for (const subscription of userSession.subscriptions) {
+        // Step 1: Fetch VMs across all subscriptions in parallel
+        const subscriptionVMFetches = userSession.subscriptions.map(async (subscription) => {
             const computeClient = new ComputeManagementClient(azureCredential, subscription.subscriptionId);
     
+            // Collect all VMs for the subscription
+            const vmList = [];
             for await (const vm of computeClient.virtualMachines.listAll()) {
-                if (!vm.id || !vm.name || !vm.location || !allowedRegions.includes(vm.location.toLowerCase())) {
-                    continue; // Skip invalid or disallowed region VMs
+                if (!vm.id || !vm.name || !vm.location || !allowedRegions.has(vm.location.toLowerCase())) {
+                    continue;
                 }
-    
-                const resourceGroup = vm.id.split("/")[4];
-    
-                try {
-                    const vmInstanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vm.name);
-    
-                    vms.push({
-                        id: vm.id,
-                        name: vm.name,
-                        status: vmInstanceView.statuses?.[1]?.displayStatus || "Unknown",
-                        region: vm.location,
-                        subscriptionId: subscription.subscriptionId
-                    });
-                } catch (error) {
-                    console.warn(`⚠️ Failed to retrieve instance view for VM ${vm.name}:`, error);
-                    vms.push({
-                        id: vm.id,
-                        name: vm.name,
-                        status: "Unknown (Error fetching status)",
-                        region: vm.location,
-                        subscriptionId: subscription.subscriptionId
-                    });
-                }
+                vmList.push({ vm, computeClient, subscriptionId: subscription.subscriptionId });
             }
-        }
-        
-        return vms;
+    
+            return vmList;
+        });
+    
+        // Wait for all subscription-level VM lists to finish
+        const allVMsBySubscription = await Promise.all(subscriptionVMFetches);
+    
+        // Step 2: Flatten and fetch instance views in parallel
+        const instanceFetches = allVMsBySubscription.flat().map(async ({ vm, computeClient, subscriptionId }) => {
+            const resourceGroup = vm.id ? vm.id.split("/")[4] : "";
+    
+            try {
+                if (!vm.name) {
+                    throw new Error(`VM name is undefined for VM with ID ${vm.id}`);
+                }
+                const vmInstanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vm.name);
+    
+                return {
+                    id: vm.id,
+                    name: vm.name,
+                    status: vmInstanceView.statuses?.[1]?.displayStatus || "Unknown",
+                    region: vm.location,
+                    subscriptionId
+                };
+            } catch (error) {
+                console.warn(`⚠️ Failed to retrieve instance view for VM ${vm.name}:`, error);
+                return {
+                    id: vm.id,
+                    name: vm.name,
+                    status: "Unknown (Error fetching status)",
+                    region: vm.location,
+                    subscriptionId
+                };
+            }
+        });
+    
+        const vmResults = await Promise.all(instanceFetches);
+        return vmResults;
     }
+    
 
     /**
      * Stops an Azure virtual machine.

@@ -149,20 +149,18 @@ export class AzureManager {
     
             console.log("🔹 Retrieved Azure Subscriptions:", subscriptions);
     
-            // Step 4: Begin fetching resource groups and VMs in parallel (non-blocking)
+            // Step 4: Cache credential and subscriptions right away
+            this.userSessions.set(session.account.id, { azureCredential, subscriptions });
+    
             const firstSubId = subscriptions[0].subscriptionId;
     
-            // Step 5: Cache credential and subscriptions right away
-            this.userSessions.set(session.account.id, { azureCredential, subscriptions });
-
-            // Step 6: Start fetching VMs and resource groups in parallel
-            const [resourceGroupsList, vms] = await Promise.all([
+            // Step 5: Fetch VMs, resource groups, and cost in parallel
+            const [resourceGroupsList, vms, cost] = await Promise.all([
                 this.getResourceGroupsForSubscription("azure", session.account.id, firstSubId),
-                this.getUserVMs(session.account.id)
+                this.getUserVMs(session.account.id),
+                this.getMonthlyCost(session.account.id) // ← Now fetched in parallel
             ]);
-
-            const cost = await this.getMonthlyCost(session.account.id);
-
+    
             vscode.window.showInformationMessage("Total cost: " + cost);
     
             const resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {

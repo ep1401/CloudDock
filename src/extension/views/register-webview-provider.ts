@@ -970,13 +970,24 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log(`✅ Successfully set downtime for ${provider.toUpperCase()} group '${groupName}'.`);
 
                             // ✅ Notify the webview about the updated downtime
-                            this.postMessage(webviewId, {
-                                type: "groupDowntimeSet",
-                                provider,
-                                time, 
-                                groupName,
-                                userId: userIdSetDowntime
-                            });
+                            if (provider === "aws") {
+                                this.postMessage(webviewId, {
+                                    type: "groupDowntimeSet",
+                                    provider,
+                                    time, 
+                                    groupName,
+                                    userId: userIdSetDowntime
+                                });
+                            }
+                            else if (provider === "azure") {
+                                this.postMessage(webviewId, {
+                                    type: "groupDowntimeSetAzure",
+                                    provider,
+                                    time, 
+                                    groupName,
+                                    userId: userIdSetDowntime
+                                });
+                            }
                         } catch (error) {
                             console.error(`❌ Error setting downtime for group '${groupName}' for ${provider.toUpperCase()} user ${userIdSetDowntime}:`, error);
                             window.showErrorMessage(`Error setting group downtime: ${error}`);
@@ -1707,6 +1718,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 }
                             });
                         }
+                        if (message.type === "groupDowntimeSetAzure") {
+                            const { provider, time, groupName, userId } = message;
+
+                            console.log("✅ Reached Azure downtime set message:", message);
+
+                            // ✅ Find all rows in the Azure VMs table
+                            const rows = document.querySelectorAll("#vmsTable tbody tr");
+
+                            rows.forEach(row => {
+                                const groupNameCell = row.cells[5];  // Column: Group
+                                const shutdownCell = row.cells[6];   // Column: Shutdown Schedule
+
+                                if (groupNameCell && groupNameCell.textContent.trim() === groupName) {
+                                    console.log("🔹 Azure VM match found. Start Time:", time.startTime, "| End Time:", time.endTime);
+                                    shutdownCell.textContent = String(time.startTime) + " | " + String(time.endTime);
+                                }
+                            });
+                        }
+
                         if (message.type === "updateCosts") {
                             const { provider, cost, userId } = message;
 
@@ -2072,6 +2102,44 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { groupName: selectedGroup }
                         });
                     });
+                    document.getElementById("submitDownActionAzure").addEventListener("click", () => {
+                        console.log("🔹 Azure downtime action requested...");
+
+                        // Get the selected group from the dropdown
+                        const selectedGroup = document.getElementById("groupNameAzure").value;
+                        if (!selectedGroup) {
+                            alert("No group selected.");
+                            return;
+                        }
+
+                        // Get the selected action from the action dropdown
+                        const selectedAction = document.getElementById("groupSelectAzure").value;
+                        let messageType = "";
+
+                        switch (selectedAction) {
+                            case "setdownazure":
+                                messageType = "setGroupDowntime";
+                                break;
+                            case "viewdownazure":
+                                messageType = "viewGroupDowntime";
+                                break;
+                            case "deldownazure":
+                                messageType = "deleteGroupDowntime";
+                                break;
+                            default:
+                                alert("Invalid action selected.");
+                                return;
+                        }
+
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "azure",
+                            webviewId,
+                            payload: { groupName: selectedGroup }
+                        });
+                    });
+
 
                 });
 

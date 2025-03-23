@@ -7,6 +7,7 @@ import { NetworkManagementClient } from "@azure/arm-network";
 import { SubscriptionClient } from "@azure/arm-subscriptions";
 import { ConsumptionManagementClient } from "@azure/arm-consumption";
 import pLimit from "p-limit";
+import * as database from "../database/db";
 
 const INSTANCE_VIEW_CONCURRENCY = 10;
 
@@ -163,9 +164,7 @@ export class AzureManager {
                 this.getUserVMs(session.account.id),
                 this.getMonthlyCost(session.account.id) 
             ]);
-    
-            vscode.window.showInformationMessage("Total cost: " + cost);
-    
+        
             const resourceGroups: { [subscriptionId: string]: { resourceGroupName: string }[] } = {
                 [firstSubId]: resourceGroupsList
             };
@@ -386,7 +385,7 @@ export class AzureManager {
     
         // Step 2: Fetch instance views with concurrency control
         const vmResults = await Promise.all(
-            allVMs.map((vmInfo) =>
+            allVMs.map(vmInfo =>
                 limit(async () => {
                     const { id, name, location, computeClient, subscriptionId } = vmInfo;
                     const resourceGroup = id.split("/")[4] || "";
@@ -414,8 +413,45 @@ export class AzureManager {
             )
         );
     
-        return vmResults;
+        // Step 3: Enrich with instance group names
+        const instanceIds = vmResults.map(vm => vm.id);
+        const instanceGroups = await database.getInstanceGroups("azure", instanceIds);
+    
+        // Step 4: Get unique group names and fetch downtimes
+        const uniqueGroupNames = [...new Set(Object.values(instanceGroups).filter(Boolean))];
+    
+        const groupDowntimes = await Promise.all(
+            uniqueGroupNames.map(async groupName => {
+                const { startTime, endTime } = await database.getGroupDowntime(groupName);
+                return { groupName, startTime, endTime };
+            })
+        );
+    
+        const downtimeMap = Object.fromEntries(
+            groupDowntimes.map(({ groupName, startTime, endTime }) => [
+                groupName,
+                `${startTime} | ${endTime}`
+            ])
+        );
+    
+        // Step 5: Attach groupName and shutdownSchedule to each VM
+        const enrichedVMs = vmResults.map(vm => {
+            const groupName = instanceGroups[vm.id] || "N/A";
+            const shutdownSchedule = groupName !== "N/A" && downtimeMap[groupName]
+                ? downtimeMap[groupName]
+                : "N/A";
+    
+            return {
+                ...vm,
+                groupName,
+                shutdownSchedule,
+            };
+        });
+    
+        console.log(`✅ Enriched ${enrichedVMs.length} Azure VMs with group info and shutdown schedules.`);
+        return enrichedVMs;
     }
+    
 
     /**
      * Stops an Azure virtual machine.

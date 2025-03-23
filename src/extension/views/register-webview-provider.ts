@@ -664,10 +664,73 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 instances: instancesNewGroup,
                                 userId: userIdCreateGroup
                             });
+                            this.postMessage(webviewId, {
+                                type: "newGroupNameAws",
+                                provider: "azure",
+                                groupName: groupname, 
+                                instances: instancesNewGroup,
+                                userId: userIdCreateGroup
+                            }); 
 
                         } catch (error) {
                             console.error(`❌ Error creating group for ${provider.toUpperCase()} user ${userIdCreateGroup}:`, error);
                             window.showErrorMessage(`Error creating group: ${error}`);
+                        }
+                        break;
+                    case "createGroupAzure":
+                        console.log(`🔹 Received createGroupAzure request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in createGroupAzure request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const azureUserId = userSession["azure"];
+
+                        if (!azureUserId) {
+                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with Azure first!");
+                            return;
+                        }
+
+                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
+                            console.warn("❌ Invalid Azure group creation request: Missing instance IDs.");
+                            window.showErrorMessage("Missing instances for Azure group creation.");
+                            return;
+                        }
+
+                        const { instanceIds: azureInstancesNewGroup } = payload;
+
+                        console.log(`📤 Creating AZURE Group for userId: ${azureUserId}`, azureInstancesNewGroup);
+                        window.showInformationMessage(`Creating Azure Group with ${azureInstancesNewGroup.length} instance(s).`);
+
+                        try {
+                            const groupname = await this.cloudManager.createGroup("azure", azureUserId, azureInstancesNewGroup);
+
+                            if (!groupname) {
+                                return;
+                            }
+
+                            console.log("✅ Successfully created Azure group.");
+
+                            this.postMessage(webviewId, {
+                                type: "groupCreatedAzure",
+                                provider: "azure",
+                                groupname,
+                                instances: azureInstancesNewGroup,
+                                userId: azureUserId
+                            });
+                            this.postMessage(webviewId, {
+                                type: "newGroupNameAzure",
+                                provider: "azure",
+                                groupName: groupname, 
+                                instances: azureInstancesNewGroup,
+                                userId: azureUserId
+                            });                            
+                        } catch (error) {
+                            console.error(`❌ Error creating Azure group for user ${azureUserId}:`, error);
+                            window.showErrorMessage(`Error creating Azure group: ${error}`);
                         }
                         break;
                     case "addToGroup":
@@ -1120,10 +1183,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 // Placeholder values for Group and Shutdown Schedule (modify as needed)
                                 const groupName = vm.groupName ? vm.groupName : "N/A";
-                                let shutdownSchedule = vm.shutdownSchedule || "N/A";
-
+                                let shutdownSchedule = vm.shutdownSchedule;
+    
                                 // Ensure that if it's "N/A | N/A", it just shows "N/A"
-                                if (shutdownSchedule.trim() === "N/A | N/A") {
+                                if (!shutdownSchedule || shutdownSchedule === "N/A" || shutdownSchedule.trim() === "N/A | N/A") {
                                     shutdownSchedule = "N/A";
                                 }
 
@@ -1135,8 +1198,8 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     <td>\${vm.name || "N/A"}</td>
                                     <td>\${statusText}</td>
                                     <td>\${vm.region}</td>
-                                    <td>"N/A"</td>
-                                    <td>"N/A"</td>
+                                    <td>\${groupName}</td>
+                                    <td>\${shutdownSchedule}</td>
                                     <td style="display: none;">\${vm.subscriptionId}</td>
                                 \`;
 
@@ -1403,6 +1466,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
                         }
+                        if (message.type === "groupCreatedAzure") {
+                            const { provider, groupname, instances, userId } = message;
+
+                            instances.forEach(instanceId => {
+                                const rows = document.querySelectorAll("#vmsTable tbody tr");
+
+                                rows.forEach(row => {
+                                    const idCell = row.cells[1]; // VM ID column (hidden)
+                                    if (idCell && idCell.textContent.trim() === instanceId) {
+                                        const groupNameCell = row.cells[5]; // Group column
+                                        groupNameCell.textContent = groupname; // ✅ Set new group name
+                                    }
+                                });
+                            });
+                        }
+
                         if (message.type === "updateGroupsAWS") {
                             console.log("✅ Received AWS user groups:", message.awsGroups);
 
@@ -1424,27 +1503,89 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 groupSelect.value = message.awsGroups[0];
                             }
                         }
+                        if (message.type === "newGroupNameAws") {
+                            const groupName = message.groupName;
+                            const groupSelectAws = document.getElementById("groupNameAws");
+
+                            if (!groupSelectAws || !groupName) {
+                                console.warn("⚠️ Cannot append new AWS group — missing group name or select element.");
+                                return;
+                            }
+
+                            // 🔄 Remove "Waiting..." option if it's the only one
+                            const firstOption = groupSelectAws.options[0];
+                            if (firstOption && firstOption.value === "") {
+                                groupSelectAws.removeChild(firstOption);
+                            }
+
+                            // 🚫 Prevent duplicates
+                            const exists = Array.from(groupSelectAws.options).some(option => option.value === groupName);
+                            if (exists) {
+                                return;
+                            }
+
+                            // ➕ Append the new group
+                            const option = document.createElement("option");
+                            option.value = groupName;
+                            option.textContent = groupName;
+                            groupSelectAws.appendChild(option);
+
+                            // ✅ Optionally select the new group
+                            groupSelectAws.value = groupName;
+                        }
+
                         if (message.type === "updateGroupsAzure") {
                             console.log("✅ Received Azure user groups:", message.azureGroups);
 
-                            const groupSelect = document.getElementById("groupNameAzure");
-                            groupSelect.innerHTML = ""; // Clear previous options
+                            const groupSelectAzure = document.getElementById("groupNameAzure");
+                            groupSelectAzure.innerHTML = ""; // Clear previous options
 
                             if (!message.azureGroups || message.azureGroups.length === 0) {
                                 console.warn("⚠️ No Azure groups found.");
-                                groupSelect.innerHTML = "<option value=''>No groups found</option>";
+                                groupSelectAzure.innerHTML = "<option value=''>No groups found</option>";
                             } else {
                                 message.azureGroups.forEach((group) => {
                                     const option = document.createElement("option");
                                     option.value = group;
                                     option.textContent = group;
-                                    groupSelect.appendChild(option);
+                                    groupSelectAzure.appendChild(option);
                                 });
 
                                 // ✅ Select the first available group automatically
-                                groupSelect.value = message.azureGroups[0];
+                                groupSelectAzure.value = message.azureGroups[0];
                             }
                         }
+                        if (message.type === "newGroupNameAzure") {
+                            const groupName = message.groupName;
+                            const groupSelectAzure = document.getElementById("groupNameAzure");
+
+                            if (!groupSelectAzure || !groupName) {
+                                console.warn("⚠️ Cannot append new Azure group — missing group name or select element.");
+                                return;
+                            }
+
+                            // 🔄 Remove "No groups found" option if it exists
+                            const firstOption = groupSelectAzure.options[0];
+                            if (firstOption && firstOption.value === "") {
+                                groupSelectAzure.removeChild(firstOption);
+                            }
+
+                            // 🚫 Prevent duplicates
+                            const exists = Array.from(groupSelectAzure.options).some(option => option.value === groupName);
+                            if (exists) {
+                                return;
+                            }
+
+                            // ➕ Append the new group
+                            const option = document.createElement("option");
+                            option.value = groupName;
+                            option.textContent = groupName;
+                            groupSelectAzure.appendChild(option);
+
+                            // ✅ Optionally select the new group
+                            groupSelectAzure.value = groupName;
+                        }
+
                         if (message.type === "groupDowntimeSet") {
                             const { provider, time, groupName, userId } = message; 
 
@@ -1682,8 +1823,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
                     });
 
-
-
                     document.getElementById("submitGroupAction").addEventListener("click", () => {
                         const selectedInstances = [];
                         console.log("🔹 Group action requested...");
@@ -1741,6 +1880,56 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { instanceIds: selectedInstances }
                         });
                     });
+                    document.getElementById("submitGroupActionAzure").addEventListener("click", () => {
+                        console.log("🔹 Azure group action requested...");
+
+                        const selectedInstances = [];
+
+                        // Get the selected action from the dropdown
+                        const selectedAction = document.getElementById("groupActionAzure").value;
+
+                        // Get all checked checkboxes in the Azure VMs table
+                        const checkboxes = document.querySelectorAll("#vmsTable tbody input[type='checkbox']:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const row = checkbox.closest("tr");
+                            const instanceId = row.cells[1].textContent.trim(); // VM ID is in hidden column index 1
+                            if (instanceId) {
+                                selectedInstances.push(instanceId);
+                            }
+                        });
+
+                        // Ensure at least one instance is selected
+                        if (selectedInstances.length === 0) {
+                            alert("No Azure VMs selected.");
+                            return;
+                        }
+
+                        let messageType = "";
+                        switch (selectedAction) {
+                            case "createazure":
+                                messageType = "createGroupAzure";
+                                break;
+                            case "addazure":
+                                messageType = "addToGroupAzure";
+                                break;
+                            case "removeazure":
+                                messageType = "removeFromGroupAzure";
+                                break;
+                            default:
+                                alert("Invalid Azure group action selected.");
+                                return;
+                        }
+
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "azure",
+                            webviewId,
+                            payload: { instanceIds: selectedInstances }
+                        });
+                    });
+
                     document.getElementById("submitDownAction").addEventListener("click", () => {
                         console.log("🔹 Downtime action requested...");
 
@@ -1779,35 +1968,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { groupName: selectedGroup }
                         });
                     });
-                    document.getElementById("submitGroupActionAzure").addEventListener("click", () => {
-                        console.log("🔹 Azure group action requested...");
-
-                        const selectedAction = document.getElementById("groupActionAzure").value;
-                        let messageType = "";
-
-                        switch (selectedAction) {
-                            case "createazure":
-                                messageType = "createGroup";
-                                break;
-                            case "addazure":
-                                messageType = "addToGroup";
-                                break;
-                            case "removeazure":
-                                messageType = "removeFromGroup";
-                                break;
-                            default:
-                                alert("Invalid group action selected.");
-                                return;
-                        }
-
-                        // Send message to VS Code extension
-                        vscode.postMessage({
-                            type: messageType,
-                            provider: "azure",
-                            webviewId,
-                        });
-                    });
-
 
                 });
 

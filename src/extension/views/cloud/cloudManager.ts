@@ -80,7 +80,8 @@ export class CloudManager {
             
         } else if (provider === "azure") {
             const userinfo =  await this.azureManager.authenticate();
-            const usergroups = await database.getUserGroups(userinfo.userAccountId, null);
+            const usergroups = await database.getUserGroups(null, userinfo.userAccountId);
+
             return {userAccountId: userinfo.userAccountId,
                 subscriptions: userinfo.subscriptions,
                 resourceGroups: userinfo.resourceGroups,

@@ -339,13 +339,13 @@ export class AzureManager {
         };
 
         // 🚀 Start VM creation asynchronously (non-blocking)
-        const vmPoller = await computeClient.virtualMachines.beginCreateOrUpdate(
+        const vmResult = await computeClient.virtualMachines.beginCreateOrUpdateAndWait(
             params.resourceGroup,
             params.vmName,
             vmParams
         );
-
-        return params.vmName; // Returning the VM name immediately
+        
+        return vmResult.id!;        
     }
 
 

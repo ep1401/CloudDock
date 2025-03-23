@@ -239,11 +239,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     // ✅ Notify the webview about the created instance
                                     this.postMessage(webviewId, {
                                         type: "vmCreated",
-                                        instanceId: vmId.instanceId,
-                                        instanceName: vmId.instanceName,
+                                        instanceId: vmId.vmId,
+                                        instanceName: vmId.vmName,
                                         userId: instanceUserId,
                                         region: payload.region,
-                                        status: "creating",
+                                        status: "running",
                                         subscriptionId: payload.subscriptionId,  
                                     });
 
@@ -1036,12 +1036,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log(`✅ Successfully removed downtime for ${provider.toUpperCase()} group '${groupNameDel}'.`);
 
                             // ✅ Notify the webview about the deleted downtime
-                            this.postMessage(webviewId, {
-                                type: "groupDowntimeDeleted",
-                                provider,
-                                groupNameDel,
-                                userId: userIdDeleteDowntime
-                            });
+                            if (provider === "aws") {
+                                this.postMessage(webviewId, {
+                                    type: "groupDowntimeDeleted",
+                                    provider,
+                                    groupNameDel,
+                                    userId: userIdDeleteDowntime
+                                });
+                            }
+                            else if (provider === "azure") {
+                                this.postMessage(webviewId, {
+                                    type: "groupDowntimeDeletedAzure",
+                                    provider,
+                                    groupNameDel,
+                                    userId: userIdDeleteDowntime
+                                });
+                            }
 
                         } catch (error) {
                             console.error(`❌ Error deleting downtime for group '${groupNameDel}' for ${provider.toUpperCase()} user ${userIdDeleteDowntime}:`, error);
@@ -1459,6 +1469,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 }
                             });
                         }
+                        if (message.type === "groupDowntimeDeletedAzure") {
+                            const { groupNameDel } = message;
+
+                            console.log("✅ Downtime deleted for Azure group:", groupNameDel);
+
+                            // ✅ Find all rows in the Azure VMs table
+                            const rows = document.querySelectorAll("#vmsTable tbody tr");
+
+                            rows.forEach(row => {
+                                const groupNameCell = row.cells[5];  // Column: Group
+                                const shutdownCell = row.cells[6];   // Column: Shutdown Schedule
+
+                                if (groupNameCell && groupNameCell.textContent.trim() === groupNameDel) {
+                                    console.log("🔁 Clearing shutdown schedule for VM in group:", groupNameDel);
+                                    shutdownCell.textContent = "N/A"; // ✅ Reset to N/A
+                                }
+                            });
+                        }
+
                         if (message.type === "updateSubscriptions") {
                             console.log("✅ Received subscriptions:", message.subscriptions);
                             updateSubscriptionDropdown(message.subscriptions);
@@ -2083,9 +2112,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             case "setdownaws":
                                 messageType = "setGroupDowntime";
                                 break;
-                            case "viewdownaws":
-                                messageType = "viewGroupDowntime";
-                                break;
                             case "deldownaws":
                                 messageType = "deleteGroupDowntime";
                                 break;
@@ -2119,9 +2145,6 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         switch (selectedAction) {
                             case "setdownazure":
                                 messageType = "setGroupDowntime";
-                                break;
-                            case "viewdownazure":
-                                messageType = "viewGroupDowntime";
                                 break;
                             case "deldownazure":
                                 messageType = "deleteGroupDowntime";

@@ -463,19 +463,32 @@ export class AzureManager {
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
-        
+    
         const azureCredential = userSession.azureCredential;
         let stoppedVMs: { vmId: string; subscriptionId: string }[] = [];
-        
+    
         for (const { vmId, subscriptionId } of vms) {
             try {
                 const vmDetails = vmId.split("/");
-                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
-                const vmName = vmDetails[8]; // Extracting VM name from VM ID
+                const resourceGroup = vmDetails[4];
+                const vmName = vmDetails[8];
+    
+                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+    
+                // 🔍 Check current status before stopping
+                const instanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vmName);
+                const status = instanceView.statuses?.[1]?.displayStatus || "Unknown";
+    
+                console.log(`ℹ️ VM ${vmName} status: ${status}`);
+    
+                if (!status.toLowerCase().includes("running")) {
+                    console.log(`⏩ Skipping VM ${vmName} since it is not running.`);
+                    continue;
+                }
     
                 console.log(`🛑 Stopping VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
-                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
                 await computeClient.virtualMachines.beginPowerOffAndWait(resourceGroup, vmName);
+    
                 stoppedVMs.push({ vmId, subscriptionId });
             } catch (error) {
                 console.error(`❌ Failed to stop VM with ID ${vmId}:`, error);
@@ -483,26 +496,39 @@ export class AzureManager {
         }
     
         return stoppedVMs;
-    }
+    }    
 
     async startVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
         const userSession = this.userSessions.get(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
-        
+    
         const azureCredential = userSession.azureCredential;
         let startedVMs: { vmId: string; subscriptionId: string }[] = [];
-        
+    
         for (const { vmId, subscriptionId } of vms) {
             try {
                 const vmDetails = vmId.split("/");
-                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
-                const vmName = vmDetails[8]; // Extracting VM name from VM ID
+                const resourceGroup = vmDetails[4]; // e.g., "my-rg"
+                const vmName = vmDetails[8];        // e.g., "my-vm"
+    
+                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+    
+                // 🔍 Check current status before starting
+                const instanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vmName);
+                const status = instanceView.statuses?.[1]?.displayStatus || "Unknown";
+    
+                console.log(`ℹ️ VM ${vmName} status: ${status}`);
+    
+                if (status.toLowerCase().includes("running")) {
+                    console.log(`⏩ Skipping VM ${vmName} since it is already running.`);
+                    continue;
+                }
     
                 console.log(`🚀 Starting VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
-                const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
                 await computeClient.virtualMachines.beginStartAndWait(resourceGroup, vmName);
+    
                 startedVMs.push({ vmId, subscriptionId });
             } catch (error) {
                 console.error(`❌ Failed to start VM with ID ${vmId}:`, error);
@@ -511,6 +537,7 @@ export class AzureManager {
     
         return startedVMs;
     }
+    
 
     async deleteVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
         const userSession = this.userSessions.get(userId);

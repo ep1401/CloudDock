@@ -684,46 +684,56 @@ export class AWSManager {
     * @param userIdAWS The AWS user ID.
     * @param instanceIds An array of instance IDs to be shut down.
     */
-    async shutdownInstances(userIdAWS: string, instanceIds: string[]) {
+      async shutdownInstances(userIdAWS: string, instanceIds: string[]) {
         if (!userIdAWS) {
             console.error("❌ No AWS user ID provided.");
             throw new Error("AWS user ID is required to shut down instances.");
         }
- 
+    
         if (!instanceIds || instanceIds.length === 0) {
             console.error("❌ No instance IDs provided.");
             throw new Error("At least one instance ID is required to shut down instances.");
         }
- 
-        // ✅ Retrieve the user session
+    
         const userSession = this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
             return;
         }
- 
+    
         const region = userSession.selectedRegion;
-        console.log(`📤 Initiating shutdown for instances in region ${region}:`, instanceIds);
- 
-        // ✅ Initialize EC2 service with correct credentials
         const ec2 = new AWS.EC2({
             accessKeyId: userSession.awsConfig.credentials.accessKeyId,
             secretAccessKey: userSession.awsConfig.credentials.secretAccessKey,
             sessionToken: userSession.awsConfig.credentials.sessionToken,
             region: region
         });
- 
+    
         try {
-            // ✅ Send stop request to AWS
-            const response = await ec2.stopInstances({ InstanceIds: instanceIds }).promise();
- 
-            console.log(`✅ Shutdown initiated for instances: ${instanceIds.join(", ")}`, response); 
+            // 🔍 Describe instances to get current states
+            const describeResult = await ec2.describeInstances({ InstanceIds: instanceIds }).promise();
+    
+            const runningInstances = describeResult.Reservations?.flatMap(reservation =>
+                reservation.Instances?.filter(instance =>
+                    instance.State?.Name === "running"
+                ).map(instance => instance.InstanceId) || []
+            ) || [];
+    
+            if (runningInstances.length === 0) {
+                console.log("⏩ No running instances to stop.");
+                return;
+            }
+    
+            console.log(`🛑 Sending stop command for running instances: ${runningInstances.join(", ")}`);
+            const response = await ec2.stopInstances({ InstanceIds: runningInstances.filter(id => id !== undefined) as string[] }).promise();
+    
+            console.log(`✅ Shutdown initiated for instances: ${runningInstances.join(", ")}`, response);
         } catch (error) {
             console.error(`❌ Error shutting down instances for user ${userIdAWS}:`, error);
             window.showErrorMessage(`Error shutting down instances: ${error}`);
         }
-    } 
+    }    
 
     async terminateInstances(userIdAWS: string, instanceIds: string[]) {
         console.log(`🗑️ Terminating AWS instances for user ${userIdAWS}:`, instanceIds);
@@ -781,7 +791,6 @@ export class AWSManager {
             throw new Error("At least one instance ID is required to start instances.");
         }
     
-        // ✅ Retrieve the user session
         const userSession = this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
@@ -790,9 +799,6 @@ export class AWSManager {
         }
     
         const region = userSession.selectedRegion;
-        console.log(`📤 Initiating start request for instances in region ${region}:`, instanceIds);
-    
-        // ✅ Initialize EC2 service with correct credentials
         const ec2 = new AWS.EC2({
             accessKeyId: userSession.awsConfig.credentials.accessKeyId,
             secretAccessKey: userSession.awsConfig.credentials.secretAccessKey,
@@ -801,16 +807,30 @@ export class AWSManager {
         });
     
         try {
-            // ✅ Send start request to AWS
-            const response = await ec2.startInstances({ InstanceIds: instanceIds }).promise();
+            // 🔍 Describe instances to check their current state
+            const describeResult = await ec2.describeInstances({ InstanceIds: instanceIds }).promise();
     
-            console.log(`✅ Start initiated for instances: ${instanceIds.join(", ")}`, response);
+            const stoppedInstances = describeResult.Reservations?.flatMap(reservation =>
+                reservation.Instances?.filter(instance =>
+                    instance.State?.Name === "stopped"
+                ).map(instance => instance.InstanceId) || []
+            ) || [];
+    
+            if (stoppedInstances.length === 0) {
+                console.log("⏩ No stopped instances to start.");
+                return;
+            }
+    
+            console.log(`🚀 Sending start command for stopped instances: ${stoppedInstances.join(", ")}`);
+            const response = await ec2.startInstances({ InstanceIds: stoppedInstances.filter(id => id !== undefined) as string[] }).promise();
+    
+            console.log(`✅ Start initiated for instances: ${stoppedInstances.join(", ")}`, response);
     
         } catch (error) {
             console.error(`❌ Error starting instances for user ${userIdAWS}:`, error);
             window.showErrorMessage(`Error starting instances: ${error}`);
         }
-    }  
+    }    
     async getTotalMonthlyCost(userAccountId: string) {
         const session = this.getUserSession(userAccountId);
         if (!session || !session.awsConfig) {

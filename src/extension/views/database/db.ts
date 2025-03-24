@@ -13,108 +13,117 @@ export const createInstanceGroup = async (
   provider: "aws" | "azure" | "both",
   userId: string,
   groupName: string,
-  instanceList: { aws?: string[]; azure?: string[] }
+  instanceList: { aws?: string[]; azure?: string[] },
+  subscriptionIds?: string[] // Only used for Azure
 ): Promise<string> => {
   try {
-    // Determine the appropriate table names
+    // Determine table/column names
     const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
     const instanceTable = provider === "aws" ? "aws_instances" : "azure_instances";
     const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
 
-    // ✅ Step 1: Check if the group already exists
+    // ✅ Step 1: Check if group already exists
     const { data: existingGroup, error: groupError } = await supabase
       .from("instance_groups")
       .select("group_id")
       .eq("group_name", groupName)
       .maybeSingle();
 
-    if (groupError) {
-      throw new Error(`Error checking group name: ${groupError.message}`);
-    }
+    if (groupError) throw new Error(`Error checking group name: ${groupError.message}`);
+    if (existingGroup) throw new Error(`A group with the name '${groupName}' already exists.`);
 
-    if (existingGroup) {
-      // ❌ If group already exists, return an error
-      throw new Error(`A group with the name '${groupName}' already exists. Please choose a different name.`);
-    }
-
-    // ✅ Step 2: Create the new group
+    // ✅ Step 2: Create group
     const groupId = uuidv4();
     const { error: insertGroupError } = await supabase
       .from("instance_groups")
       .insert([{ group_id: groupId, group_name: groupName }]);
 
-    if (insertGroupError) {
-      throw new Error(`Error creating group: ${insertGroupError.message}`);
-    }
+    if (insertGroupError) throw new Error(`Error creating group: ${insertGroupError.message}`);
 
-    // ✅ Step 3: Ensure the user session exists and add the group ID
+    // ✅ Step 3: Handle user session
     const { data: sessionData, error: sessionError } = await supabase
       .from(sessionTable)
       .select("group_ids")
       .eq(sessionColumn, userId)
       .maybeSingle();
 
-    if (sessionError) {
-      throw new Error(`Error fetching session data from ${sessionTable}: ${sessionError.message}`);
-    }
+    if (sessionError) throw new Error(`Error fetching session: ${sessionError.message}`);
 
-    let updatedGroupIds = sessionData ? [...new Set([...sessionData.group_ids, groupId])] : [groupId];
+    const updatedGroupIds = sessionData
+      ? [...new Set([...sessionData.group_ids, groupId])]
+      : [groupId];
 
     if (sessionData) {
-      // Update existing session with new group ID
       const { error: updateSessionError } = await supabase
         .from(sessionTable)
         .update({ group_ids: updatedGroupIds })
         .eq(sessionColumn, userId);
 
       if (updateSessionError) {
-        throw new Error(`Error updating session in ${sessionTable}: ${updateSessionError.message}`);
+        throw new Error(`Error updating session: ${updateSessionError.message}`);
       }
     } else {
-      // Insert new session if not found
       const { error: insertSessionError } = await supabase
         .from(sessionTable)
         .insert([{ [sessionColumn]: userId, group_ids: updatedGroupIds }]);
 
       if (insertSessionError) {
-        throw new Error(`Error inserting session in ${sessionTable}: ${insertSessionError.message}`);
+        throw new Error(`Error inserting session: ${insertSessionError.message}`);
       }
     }
 
-    // ✅ Step 4: Insert or update instances in the _instances table
-    const updateInstances = async (instances?: string[]) => {
+    // ✅ Step 4: Insert or update instances
+    const updateInstances = async (
+      instances?: string[],
+      subs?: string[]
+    ) => {
       if (!instances || instances.length === 0) return;
 
-      // Fetch existing instances
       const { data: existingInstances, error: fetchError } = await supabase
         .from(instanceTable)
         .select("instance_id")
         .in("instance_id", instances);
 
-      if (fetchError) {
-        throw new Error(`Error fetching existing instances: ${fetchError.message}`);
-      }
+      if (fetchError) throw new Error(`Error fetching instances: ${fetchError.message}`);
 
-      const existingInstanceIds = new Set(existingInstances.map(instance => instance.instance_id));
+      const existingInstanceIds = new Set(
+        existingInstances.map(instance => instance.instance_id)
+      );
 
-      // Prepare data for insertion (new instances) or updates (existing instances)
       const newInstances = instances
-        .filter(instanceId => !existingInstanceIds.has(instanceId))
-        .map(instanceId => ({
-          instance_id: instanceId,
-          group_id: groupId,
-          group_name: groupName,
-          [sessionColumn]: userId, // Assign user to instance
-        }));
+        .filter(id => !existingInstanceIds.has(id))
+        .map((instanceId, index) => {
+          const base = {
+            instance_id: instanceId,
+            group_id: groupId,
+            group_name: groupName,
+            [sessionColumn]: userId
+          };
+
+          if (provider === "azure" && subs?.[index]) {
+            return { ...base, sub_name: subs[index] };
+          }
+
+          return base;
+        });
 
       const updatePromises = instances
-        .filter(instanceId => existingInstanceIds.has(instanceId))
-        .map(instanceId =>
-          supabase
+        .filter(id => existingInstanceIds.has(id))
+        .map((instanceId, index) => {
+          const updateData: any = {
+            group_id: groupId,
+            group_name: groupName
+          };
+
+          if (provider === "azure" && subs?.[index]) {
+            updateData.sub_name = subs[index];
+          }
+
+          return supabase
             .from(instanceTable)
-            .update({ group_id: groupId, group_name: groupName })
-            .eq("instance_id", instanceId)
-        );
+            .update(updateData)
+            .eq("instance_id", instanceId);
+        });
 
       // Insert new instances
       if (newInstances.length > 0) {
@@ -131,24 +140,19 @@ export const createInstanceGroup = async (
       await Promise.all(updatePromises);
     };
 
-    // Handle AWS instances
+    // ✅ Apply updates by provider
     if (provider === "aws" || provider === "both") {
       await updateInstances(instanceList.aws);
     }
 
-    // Handle Azure instances
     if (provider === "azure" || provider === "both") {
-      await updateInstances(instanceList.azure);
+      await updateInstances(instanceList.azure, subscriptionIds);
     }
 
     return `Group '${groupName}' created and instances updated successfully.`;
   } catch (error) {
     console.error("Error in createInstanceGroup:", error);
-    if (error instanceof Error) {
-      throw new Error(error.message);
-    } else {
-      throw new Error(String(error));
-    }
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
 
@@ -194,105 +198,114 @@ export const addInstancesToGroup = async (
   provider: "aws" | "azure" | "both",
   userId: string,
   groupName: string,
-  instanceList: { aws?: string[]; azure?: string[] }
+  instanceList: { aws?: string[]; azure?: string[] },
+  subscriptionIds?: string[] // Only used for Azure
 ): Promise<string> => {
   try {
-      // ✅ Step 1: Retrieve the group ID based on the group name
-      const { data: groupData, error: groupError } = await supabase
-          .from("instance_groups")
-          .select("group_id")
-          .eq("group_name", groupName)
-          .maybeSingle();
+    // ✅ Step 1: Get group ID
+    const { data: groupData, error: groupError } = await supabase
+      .from("instance_groups")
+      .select("group_id")
+      .eq("group_name", groupName)
+      .maybeSingle();
 
-      if (groupError) {
-          throw new Error(`Error retrieving group ID: ${groupError.message}`);
+    if (groupError) throw new Error(`Error retrieving group ID: ${groupError.message}`);
+    if (!groupData) throw new Error(`Group '${groupName}' does not exist.`);
+
+    const groupId = groupData.group_id;
+
+    // ✅ Step 2: Verify user has access to the group
+    let userGroupIds: string[] = [];
+
+    if (provider === "both") {
+      const { data: awsSession, error: awsError } = await supabase
+        .from("aws_sessions")
+        .select("group_ids")
+        .eq("aws_id", userId)
+        .maybeSingle();
+
+      const { data: azureSession, error: azureError } = await supabase
+        .from("azure_sessions")
+        .select("group_ids")
+        .eq("azure_id", userId)
+        .maybeSingle();
+
+      if (awsError || azureError) {
+        throw new Error(`Error checking user group access: ${awsError?.message || azureError?.message}`);
       }
 
-      if (!groupData) {
-          throw new Error(`Group '${groupName}' does not exist.`);
+      userGroupIds = [
+        ...(awsSession?.group_ids || []),
+        ...(azureSession?.group_ids || [])
+      ];
+    } else {
+      const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
+      const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
+
+      const { data: sessionData, error: sessionError } = await supabase
+        .from(sessionTable)
+        .select("group_ids")
+        .eq(sessionColumn, userId)
+        .maybeSingle();
+
+      if (sessionError) {
+        throw new Error(`Error fetching session data from ${sessionTable}: ${sessionError.message}`);
       }
 
-      const groupId = groupData.group_id;
+      userGroupIds = sessionData?.group_ids || [];
+    }
 
-      // ✅ Step 2: Check if the user has access to the group ID
-      let userGroupIds: string[] = [];
+    if (!userGroupIds.includes(groupId)) {
+      throw new Error(`User does not have access to group '${groupName}'.`);
+    }
 
-      if (provider === "both") {
-          const { data: awsSession, error: awsError } = await supabase
-              .from("aws_sessions")
-              .select("group_ids")
-              .eq("aws_id", userId)
-              .maybeSingle();
+    // ✅ Step 3: Upsert instances
+    const upsertInstances = async (
+      instances?: string[],
+      instanceTable?: string,
+      sessionColumn?: string,
+      subs?: string[]
+    ) => {
+      if (!instances || instances.length === 0 || !instanceTable || !sessionColumn) return;
 
-          const { data: azureSession, error: azureError } = await supabase
-              .from("azure_sessions")
-              .select("group_ids")
-              .eq("azure_id", userId)
-              .maybeSingle();
+      const instanceData = instances.map((instanceId, index) => {
+        const base = {
+          instance_id: instanceId,
+          group_id: groupId,
+          group_name: groupName,
+          [sessionColumn]: userId
+        };
 
-          if (awsError || azureError) {
-              throw new Error(`Error checking user group access: ${awsError?.message || azureError?.message}`);
-          }
+        if (instanceTable === "azure_instances" && subs?.[index]) {
+          return { ...base, sub_name: subs[index] };
+        }
 
-          userGroupIds = [
-              ...(awsSession?.group_ids || []),
-              ...(azureSession?.group_ids || [])
-          ];
-      } else {
-          const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
-          const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
+        return base;
+      });
 
-          const { data: sessionData, error: sessionError } = await supabase
-              .from(sessionTable)
-              .select("group_ids")
-              .eq(sessionColumn, userId)
-              .maybeSingle();
+      const { error: upsertError } = await supabase
+        .from(instanceTable)
+        .upsert(instanceData, { onConflict: "instance_id" });
 
-          if (sessionError) {
-              throw new Error(`Error fetching session data from ${sessionTable}: ${sessionError.message}`);
-          }
-
-          userGroupIds = sessionData?.group_ids || [];
+      if (upsertError) {
+        throw new Error(`Error inserting/updating instances: ${upsertError.message}`);
       }
+    };
 
-      if (!userGroupIds.includes(groupId)) {
-          throw new Error(`User does not have access to group '${groupName}'.`);
-      }
+    // ✅ Handle AWS
+    if (provider === "aws" || provider === "both") {
+      await upsertInstances(instanceList.aws, "aws_instances", "aws_id");
+    }
 
-      // ✅ Step 3: Insert instances if they do not exist or update if they do
-      const upsertInstances = async (instances?: string[], instanceTable?: string, sessionColumn?: string) => {
-          if (!instances || instances.length === 0 || !instanceTable || !sessionColumn) return;
+    // ✅ Handle Azure with sub_name support
+    if (provider === "azure" || provider === "both") {
+      await upsertInstances(instanceList.azure, "azure_instances", "azure_id", subscriptionIds);
+    }
 
-          const instanceData = instances.map(instanceId => ({
-              instance_id: instanceId,
-              group_id: groupId,
-              group_name: groupName,
-              [sessionColumn]: userId
-          }));
-
-          const { error: upsertError } = await supabase
-              .from(instanceTable)
-              .upsert(instanceData, { onConflict: "instance_id" });
-
-          if (upsertError) {
-              throw new Error(`Error inserting/updating instances: ${upsertError.message}`);
-          }
-      };
-
-      // Handle AWS instances
-      if (provider === "aws" || provider === "both") {
-          await upsertInstances(instanceList.aws, "aws_instances", "aws_id");
-      }
-
-      // Handle Azure instances
-      if (provider === "azure" || provider === "both") {
-          await upsertInstances(instanceList.azure, "azure_instances", "azure_id");
-      }
-
-      return `✅ Instances successfully added to group "${groupName}".`;
+    return `✅ Instances successfully added to group "${groupName}".`;
   } catch (error) {
-      console.error("❌ Error in addInstancesToGroup:", error);
-      throw new Error(error instanceof Error ? error.message : String(error));
+    console.error("❌ Error in addInstancesToGroup:", error);
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
 
@@ -574,50 +587,54 @@ export const getAllGroupDowntimes = async () => {
 
 export const getInstancesByGroup = async (groupName: string) => {
   try {
-      // ✅ Step 1: Retrieve the group ID based on the group name
-      const { data: groupData, error: groupError } = await supabase
-          .from("instance_groups")
-          .select("group_id")
-          .eq("group_name", groupName)
-          .maybeSingle();
+    // ✅ Step 1: Retrieve the group ID based on the group name
+    const { data: groupData, error: groupError } = await supabase
+      .from("instance_groups")
+      .select("group_id")
+      .eq("group_name", groupName)
+      .maybeSingle();
 
-      if (groupError) {
-          throw new Error(`Error retrieving group ID: ${groupError.message}`);
-      }
+    if (groupError) {
+      throw new Error(`Error retrieving group ID: ${groupError.message}`);
+    }
 
-      if (!groupData) {
-          console.warn(`⚠️ No group found with name '${groupName}'.`);
-          return { awsInstances: [], azureInstances: [] };
-      }
+    if (!groupData) {
+      console.warn(`⚠️ No group found with name '${groupName}'.`);
+      return { awsInstances: [], azureInstances: [] };
+    }
 
-      const groupId = groupData.group_id;
+    const groupId = groupData.group_id;
 
-      // ✅ Step 2: Retrieve AWS instances associated with the group ID
-      const { data: awsInstances, error: awsError } = await supabase
-          .from("aws_instances")
-          .select("instance_id, aws_id")
-          .eq("group_id", groupId);
+    // ✅ Step 2: Retrieve AWS instances
+    const { data: awsInstances, error: awsError } = await supabase
+      .from("aws_instances")
+      .select("instance_id, aws_id")
+      .eq("group_id", groupId);
 
-      if (awsError) {
-          throw new Error(`Error retrieving AWS instances: ${awsError.message}`);
-      }
+    if (awsError) {
+      throw new Error(`Error retrieving AWS instances: ${awsError.message}`);
+    }
 
-      // ✅ Step 3: Retrieve Azure instances associated with the group ID
-      const { data: azureInstances, error: azureError } = await supabase
-          .from("azure_instances")
-          .select("instance_id, azure_id")
-          .eq("group_id", groupId);
+    // ✅ Step 3: Retrieve Azure instances (with subscription ID)
+    const { data: azureInstances, error: azureError } = await supabase
+      .from("azure_instances")
+      .select("instance_id, azure_id, sub_name") // ← added sub_name here
+      .eq("group_id", groupId);
 
-      if (azureError) {
-          throw new Error(`Error retrieving Azure instances: ${azureError.message}`);
-      }
+    if (azureError) {
+      throw new Error(`Error retrieving Azure instances: ${azureError.message}`);
+    }
 
-      console.log(`✅ Retrieved ${awsInstances.length} AWS instances and ${azureInstances.length} Azure instances for group '${groupName}'.`);
-      return { awsInstances: awsInstances || [], azureInstances: azureInstances || [] };
+    console.log(`✅ Retrieved ${awsInstances.length} AWS instances and ${azureInstances.length} Azure instances for group '${groupName}'.`);
+
+    return {
+      awsInstances: awsInstances || [],
+      azureInstances: azureInstances || []
+    };
 
   } catch (error) {
-      console.error("❌ Error retrieving instances by group:", error);
-      return { awsInstances: [], azureInstances: [] }; // Return empty lists on error
+    console.error("❌ Error retrieving instances by group:", error);
+    return { awsInstances: [], azureInstances: [] };
   }
 };
 

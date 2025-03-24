@@ -649,7 +649,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         try {
                             // ✅ Call the general `createGroup` function in CloudManager
-                            const groupname = await this.cloudManager.createGroup(provider, userIdCreateGroup, instancesNewGroup);
+                            const groupname = await this.cloudManager.createGroup(provider, userIdCreateGroup, instancesNewGroup, []);
 
                             if (!groupname) {
                                 return;
@@ -677,62 +677,70 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error creating group: ${error}`);
                         }
                         break;
-                    case "createGroupAzure":
-                        console.log(`🔹 Received createGroupAzure request from webview ${webviewId}:`, data);
-
-                        if (!webviewId) {
-                            console.error("❌ Missing webviewId in createGroupAzure request.");
-                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
-                            return;
-                        }
-
-                        const azureUserId = userSession["azure"];
-
-                        if (!azureUserId) {
-                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
-                            window.showErrorMessage("Please authenticate with Azure first!");
-                            return;
-                        }
-
-                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
-                            console.warn("❌ Invalid Azure group creation request: Missing instance IDs.");
-                            window.showErrorMessage("Missing instances for Azure group creation.");
-                            return;
-                        }
-
-                        const { instanceIds: azureInstancesNewGroup } = payload;
-
-                        console.log(`📤 Creating AZURE Group for userId: ${azureUserId}`, azureInstancesNewGroup);
-                        window.showInformationMessage(`Creating Azure Group with ${azureInstancesNewGroup.length} instance(s).`);
-
-                        try {
-                            const groupname = await this.cloudManager.createGroup("azure", azureUserId, azureInstancesNewGroup);
-
-                            if (!groupname) {
+                        case "createGroupAzure":
+                            console.log(`🔹 Received createGroupAzure request from webview ${webviewId}:`, data);
+                        
+                            if (!webviewId) {
+                                console.error("❌ Missing webviewId in createGroupAzure request.");
+                                window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
                                 return;
                             }
-
-                            console.log("✅ Successfully created Azure group.");
-
-                            this.postMessage(webviewId, {
-                                type: "groupCreatedAzure",
-                                provider: "azure",
-                                groupname,
-                                instances: azureInstancesNewGroup,
-                                userId: azureUserId
-                            });
-                            this.postMessage(webviewId, {
-                                type: "newGroupNameAzure",
-                                provider: "azure",
-                                groupName: groupname, 
-                                instances: azureInstancesNewGroup,
-                                userId: azureUserId
-                            });                            
-                        } catch (error) {
-                            console.error(`❌ Error creating Azure group for user ${azureUserId}:`, error);
-                            window.showErrorMessage(`Error creating Azure group: ${error}`);
-                        }
-                        break;
+                        
+                            const azureUserId = userSession["azure"];
+                        
+                            if (!azureUserId) {
+                                console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                                window.showErrorMessage("Please authenticate with Azure first!");
+                                return;
+                            }
+                        
+                            if (!payload || !Array.isArray(payload.instances) || payload.instances.length === 0) {
+                                console.warn("❌ Invalid Azure group creation request: Missing instances.");
+                                window.showErrorMessage("Missing instances for Azure group creation.");
+                                return;
+                            }
+                        
+                            const instanceIdsCreate: string[] = payload.instances.map((i: { vmId: string }) => i.vmId);
+                            const subscriptionIds: string[] = payload.instances.map((i: { subscriptionId: string }) => i.subscriptionId);
+                        
+                            console.log(`📤 Creating AZURE Group for userId: ${azureUserId}`, instanceIdsCreate);
+                            window.showInformationMessage(`Creating Azure Group with ${instanceIdsCreate.length} instance(s).`);
+                        
+                            try {
+                                const groupname = await this.cloudManager.createGroup(
+                                    "azure",
+                                    azureUserId,
+                                    instanceIdsCreate,
+                                    subscriptionIds
+                                );
+                        
+                                if (!groupname) {
+                                    return;
+                                }
+                        
+                                console.log("✅ Successfully created Azure group.");
+                        
+                                this.postMessage(webviewId, {
+                                    type: "groupCreatedAzure",
+                                    provider: "azure",
+                                    groupname,
+                                    instances: payload.instances,
+                                    userId: azureUserId
+                                });
+                        
+                                this.postMessage(webviewId, {
+                                    type: "newGroupNameAzure",
+                                    provider: "azure",
+                                    groupName: groupname, 
+                                    instances: payload.instances,
+                                    userId: azureUserId
+                                });
+                        
+                            } catch (error) {
+                                console.error(`❌ Error creating Azure group for user ${azureUserId}:`, error);
+                                window.showErrorMessage(`Error creating Azure group: ${error}`);
+                            }
+                            break;                        
                     case "addToGroup":
                         console.log(`🔹 Received addToGroup request from webview ${webviewId}:`, data);
 
@@ -763,7 +771,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         try {
                             // ✅ Call the general `addInstancesToGroup` function in CloudManager
-                            const groupname = await this.cloudManager.addInstancesToGroup(provider, userIdAddGroup, instancesToAdd);
+                            const groupname = await this.cloudManager.addInstancesToGroup(provider, userIdAddGroup, instancesToAdd, []);
 
                             if (!groupname) {
                                 return;
@@ -783,60 +791,64 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error adding instances: ${error}`);
                         }
                         break;
-                    case "addToGroupAzure":
-                        console.log(`🔹 Received addToGroupAzure request from webview ${webviewId}:`, data);
-
-                        if (!webviewId) {
-                            console.error("❌ Missing webviewId in addToGroupAzure request.");
-                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
-                            return;
-                        }
-
-                        const azureUserIdAddGroup = userSession["azure"];
-
-                        if (!azureUserIdAddGroup) {
-                            console.error("❌ No authenticated Azure user found. Please authenticate first.");
-                            window.showErrorMessage("Please authenticate with Azure first!");
-                            return;
-                        }
-
-                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
-                            console.warn("❌ Invalid add request: Missing instance IDs.");
-                            window.showErrorMessage("Missing Azure instances for adding to group.");
-                            return;
-                        }
-
-                        const { instanceIds: instancesToAddAzure } = payload;
-
-                        console.log(`📤 Adding instances to AZURE group for userId: ${azureUserIdAddGroup}`, instancesToAddAzure);
-                        window.showInformationMessage(`Adding ${instancesToAddAzure.length} Azure instance(s) to a group.`);
-
-                        try {
-                            // ✅ Call the general method for Azure in your cloud manager
-                            const groupname = await this.cloudManager.addInstancesToGroup("azure", azureUserIdAddGroup, instancesToAddAzure);
-
-                            if (!groupname) {
+                        case "addToGroupAzure":
+                            console.log(`🔹 Received addToGroupAzure request from webview ${webviewId}:`, data);
+                        
+                            if (!webviewId) {
+                                console.error("❌ Missing webviewId in addToGroupAzure request.");
+                                window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
                                 return;
                             }
-
-                            console.log(`✅ Successfully added Azure instances to group: ${instancesToAddAzure.join(", ")}`);
-
-                            console.log("group name: ", groupname);
-                            // ✅ Notify the Webview to update the Azure VM table
-                            this.postMessage(webviewId, {
-                                type: "groupCreatedAzure",
-                                provider: "azure",
-                                groupname,
-                                instances: instancesToAddAzure,
-                                userId: azureUserIdAddGroup
-                            });
-
-                        } catch (error) {
-                            console.error(`❌ Error adding Azure instances to group for user ${azureUserIdAddGroup}:`, error);
-                            window.showErrorMessage(`Error adding Azure instances to group: ${error}`);
-                        }
-
-                        break;
+                        
+                            const azureUserIdAddGroup = userSession["azure"];
+                        
+                            if (!azureUserIdAddGroup) {
+                                console.error("❌ No authenticated Azure user found. Please authenticate first.");
+                                window.showErrorMessage("Please authenticate with Azure first!");
+                                return;
+                            }
+                        
+                            if (!payload || !Array.isArray(payload.instances) || payload.instances.length === 0) {
+                                console.warn("❌ Invalid add request: Missing instances.");
+                                window.showErrorMessage("Missing Azure instances for adding to group.");
+                                return;
+                            }
+                        
+                            // ✅ Extract VM and subscription IDs
+                            const instanceIdsToAdd: string[] = payload.instances.map((i: { vmId: string }) => i.vmId);
+                            const subscriptionIdsToAdd: string[] = payload.instances.map((i: { subscriptionId: string }) => i.subscriptionId);
+                        
+                            console.log(`📤 Adding instances to AZURE group for userId: ${azureUserIdAddGroup}`, instanceIdsToAdd);
+                            window.showInformationMessage(`Adding ${instanceIdsToAdd.length} Azure instance(s) to a group.`);
+                        
+                            try {
+                                const groupname = await this.cloudManager.addInstancesToGroup(
+                                    "azure",
+                                    azureUserIdAddGroup,
+                                    instanceIdsToAdd,
+                                    subscriptionIdsToAdd
+                                );
+                        
+                                if (!groupname) return;
+                        
+                                console.log(`✅ Successfully added Azure instances to group: ${instanceIdsToAdd.join(", ")}`);
+                                console.log("group name: ", groupname);
+                        
+                                // ✅ Notify the Webview to update
+                                this.postMessage(webviewId, {
+                                    type: "groupCreatedAzure",
+                                    provider: "azure",
+                                    groupname,
+                                    instances: payload.instances,
+                                    userId: azureUserIdAddGroup
+                                });
+                        
+                            } catch (error) {
+                                console.error(`❌ Error adding Azure instances to group for user ${azureUserIdAddGroup}:`, error);
+                                window.showErrorMessage(`Error adding Azure instances to group: ${error}`);
+                            }
+                        
+                            break;                        
                     case "removeFromGroup":
                         if (!webviewId) {
                             console.error("❌ Missing webviewId in removeFromGroup request.");
@@ -899,32 +911,33 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
-                            console.warn("❌ Invalid Azure remove request: Missing instance IDs.");
+                        if (!payload || !Array.isArray(payload.instances) || payload.instances.length === 0) {
+                            console.warn("❌ Invalid Azure remove request: Missing instances.");
                             window.showErrorMessage("Missing Azure instances for removal from group.");
                             return;
                         }
 
-                        const { instanceIds: instancesToRemoveAzure } = payload;
+                        const instanceIdsToRemove: string[] = payload.instances.map((i: { vmId: string }) => i.vmId);
 
-                        window.showInformationMessage(`Removing ${instancesToRemoveAzure.length} Azure instance(s) from a group.`);
+                        window.showInformationMessage(`Removing ${instanceIdsToRemove.length} Azure instance(s) from a group.`);
 
                         try {
-                            // ✅ Call the general removeInstancesFromGroup for Azure
-                            const groupname = await this.cloudManager.removeInstancesFromGroup("azure", azureUserIdRemoveGroup, instancesToRemoveAzure);
+                            const groupname = await this.cloudManager.removeInstancesFromGroup(
+                                "azure",
+                                azureUserIdRemoveGroup,
+                                instanceIdsToRemove
+                            );
 
-                            if (!groupname) {
-                                return;
-                            }
+                            if (!groupname) return;
 
-                            console.log(`✅ Successfully removed Azure instances from group: ${instancesToRemoveAzure.join(", ")}`);
+                            console.log(`✅ Successfully removed Azure instances from group: ${instanceIdsToRemove.join(", ")}`);
                             console.log("group name: ", groupname);
-                            // ✅ Notify the Webview to update the Azure table
+
                             this.postMessage(webviewId, {
                                 type: "groupCreatedAzure",
                                 provider: "azure",
                                 groupname,
-                                instances: instancesToRemoveAzure,
+                                instances: payload.instances, // preserve structure for frontend
                                 userId: azureUserIdRemoveGroup
                             });
 
@@ -932,7 +945,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.error(`❌ Error removing Azure instances from group for user ${azureUserIdRemoveGroup}:`, error);
                             window.showErrorMessage(`Error removing Azure instances: ${error}`);
                         }
+
                         break;
+
                     case "setGroupDowntime":
                         console.log(`🔹 Received setGroupDowntime request from webview ${webviewId}:`, data);
 
@@ -1611,17 +1626,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                         if (message.type === "groupCreatedAzure") {
                             const { provider, groupname, instances, userId } = message;
-
-                            instances.forEach(instanceId => {
+                            console.log("instances: ", instances);
+                            console.log("groupname: ", groupname);
+                            instances.forEach(({ vmId }) => {
                                 const rows = document.querySelectorAll("#vmsTable tbody tr");
 
                                 rows.forEach(row => {
-                                    const idCell = row.cells[1]; // VM ID column (hidden)
-                                    if (idCell && idCell.textContent.trim() === instanceId) {
-                                        console.log("reached groupCreatedAzure: ", instanceId);
-                                        const groupNameCell = row.cells[5]; // Group column
-                                        groupNameCell.textContent = groupname; // ✅ Set new group name
-                                    }
+                                const idCell = row.cells[1]; // VM ID column (hidden)
+                                if (idCell && idCell.textContent.trim() === vmId) {
+                                    console.log("reached groupCreatedAzure: ", vmId);
+                                    const groupNameCell = row.cells[5]; // Group column
+                                    groupNameCell.textContent = groupname; // ✅ Set new group name
+                                }
                                 });
                             });
                         }
@@ -2056,11 +2072,14 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         checkboxes.forEach(checkbox => {
                             const row = checkbox.closest("tr");
-                            const instanceId = row.cells[1].textContent.trim(); // VM ID is in hidden column index 1
-                            if (instanceId) {
-                                selectedInstances.push(instanceId);
+                            const instanceId = row.cells[1].textContent.trim();  // VM ID
+                            const subscriptionId = row.cells[7].textContent.trim(); // Subscription ID (hidden column)
+
+                            if (instanceId && subscriptionId) {
+                                selectedInstances.push({ vmId: instanceId, subscriptionId });
                             }
                         });
+
 
                         // Ensure at least one instance is selected
                         if (selectedInstances.length === 0) {
@@ -2089,7 +2108,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             type: messageType,
                             provider: "azure",
                             webviewId,
-                            payload: { instanceIds: selectedInstances }
+                            payload: { instances: selectedInstances } // not just instanceIds anymore
                         });
                     });
 

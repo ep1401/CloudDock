@@ -404,64 +404,83 @@ export class CloudManager {
             throw new Error(`VM start failed: ${error}`);
         }
     }    
-    async createGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
+    async createGroup(
+        provider: "aws" | "azure" | "both",
+        userId: string,
+        instanceIds: string[],
+        subscriptionIds?: string[]
+      ) {
         try {
-            // ✅ Prompt user for group name
-            const groupName = await this.promptForInput("Enter Group Name", "Group name...");
-            if (!groupName) {
-                window.showErrorMessage("❌ Group creation canceled: No name provided.");
-                return;
-            }
-
-            console.log(`📩 Creating ${provider.toUpperCase()} group: "${groupName}" for user: ${userId}`);
-
-            // ✅ Format the instance list based on provider
-            const instanceList = {
-                aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
-                azure: provider === "azure" || provider === "both" ? instanceIds : undefined
-            };
-
-            // ✅ Call the database function to create the group
-            const result = await database.createInstanceGroup(provider, userId, groupName, instanceList);
-
-            // ✅ Provide feedback to the user
-            window.showInformationMessage(`✅ Group "${groupName}" created successfully.`);
-            console.log(result);
-            return groupName;
-
+          // ✅ Prompt user for group name
+          const groupName = await this.promptForInput("Enter Group Name", "Group name...");
+          if (!groupName) {
+            window.showErrorMessage("❌ Group creation canceled: No name provided.");
+            return;
+          }
+      
+          console.log(`📩 Creating ${provider.toUpperCase()} group: "${groupName}" for user: ${userId}`);
+      
+          // ✅ Format the instance list
+          const instanceList = {
+            aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
+            azure: provider === "azure" || provider === "both" ? instanceIds : undefined
+          };
+      
+          // ✅ Call the database function
+          if (provider === "azure" || provider === "both") {
+            await database.createInstanceGroup(provider, userId, groupName, instanceList, subscriptionIds || []);
+          } else {
+            await database.createInstanceGroup(provider, userId, groupName, instanceList);
+          }
+      
+          // ✅ Inform the user
+          window.showInformationMessage(`✅ Group "${groupName}" created successfully.`);
+          return groupName;
+      
         } catch (error) {
-            console.error("❌ Error creating group:", error);
-            window.showErrorMessage(`❌ Error creating group: ${error}`);
-            return null;
+          console.error("❌ Error creating group:", error);
+          window.showErrorMessage(`❌ Error creating group: ${error}`);
+          return null;
         }
-    }
-    async addInstancesToGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
+      }      
+      async addInstancesToGroup(
+        provider: "aws" | "azure" | "both",
+        userId: string,
+        instanceIds: string[],
+        subscriptionIds?: string[] // Optional, only used for Azure
+      ) {
         try {
-            // ✅ Prompt user for group name
-            const groupName = await this.promptForInput("Enter Group Name", "Group name...");
-            if (!groupName) {
-                window.showErrorMessage("❌ Adding instances canceled: No group name provided.");
-                return;
-            }
-    
-            // ✅ Format the instance list based on provider
-            const instanceList = {
-                aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
-                azure: provider === "azure" || provider === "both" ? instanceIds : undefined
-            };
-    
-            // ✅ Call the database function to add instances to an existing group
-            const result = await database.addInstancesToGroup(provider, userId, groupName, instanceList);
-    
-            // ✅ Provide feedback to the user
-            window.showInformationMessage(`✅ Successfully added ${instanceIds.length} instance(s) to group "${groupName}".`);
-            console.log(result);
-            return groupName;
+          // ✅ Prompt user for group name
+          const groupName = await this.promptForInput("Enter Group Name", "Group name...");
+          if (!groupName) {
+            window.showErrorMessage("❌ Adding instances canceled: No group name provided.");
+            return;
+          }
+      
+          // ✅ Format the instance list
+          const instanceList = {
+            aws: provider === "aws" || provider === "both" ? instanceIds : undefined,
+            azure: provider === "azure" || provider === "both" ? instanceIds : undefined
+          };
+      
+          // ✅ Call the database function
+          let result;
+          if (provider === "azure" || provider === "both") {
+            result = await database.addInstancesToGroup(provider, userId, groupName, instanceList, subscriptionIds || []);
+          } else {
+            result = await database.addInstancesToGroup(provider, userId, groupName, instanceList);
+          }
+      
+          // ✅ Provide feedback
+          window.showInformationMessage(`✅ Successfully added ${instanceIds.length} instance(s) to group "${groupName}".`);
+          console.log(result);
+          return groupName;
+      
         } catch (error) {
-            window.showErrorMessage(`❌ Error adding instances: ${error}`);
-            return null;
+          window.showErrorMessage(`❌ Error adding instances: ${error}`);
+          return null;
         }
-    } 
+      }      
     async removeInstancesFromGroup(provider: "aws" | "azure" | "both", userId: string, instanceIds: string[]) {
         try {
             // ✅ Format the instance list based on provider

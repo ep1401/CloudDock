@@ -60,7 +60,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (typeof result === "string") {
                                 userId = result;
-                            } else if (result && typeof result === "object" && "userAccountId" in result ) {
+                            } else if (result && typeof result === "object" && "userAccountId" in result) {
                                 userId = result.userAccountId;
 
                                 if (typeof userId === "string" && userId.trim().length > 0) {
@@ -70,26 +70,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                     // ✅ Send messages to update UI
                                     this.postMessage(webviewId, { type: `${provider}Connected`, userId });
-                                    if (provider == "aws") {
-                                        if ('keyPairs' in result) {
+
+                                    if (provider === "aws") {
+                                        if ("keyPairs" in result) {
                                             const { keyPairs } = result;
                                             this.postMessage(webviewId, { type: "updateKeyPairs", keyPairs, userId });
                                         }
-                                        if ('ec2instances' in result) {
+                                        if ("ec2instances" in result) {
                                             const { ec2instances } = result;
                                             this.postMessage(webviewId, { type: "updateInstances", instances: ec2instances, userId });
                                         }
-                                        if ('usergroups' in result) {
+                                        if ("usergroups" in result) {
                                             const { usergroups } = result;
                                             const { awsGroups } = usergroups;
                                             console.log("awsgroup:", awsGroups);
                                             this.postMessage(webviewId, { type: "updateGroupsAWS", awsGroups, userId });
                                         }
-                                        if ('cost' in result) {
+                                        if ("cost" in result) {
                                             const { cost } = result;
                                             this.postMessage(webviewId, { type: "updateCosts", provider, cost, userId });
                                         }
-                                     } else if (provider === "azure") {
+                                    } else if (provider === "azure") {
                                         if ("subscriptions" in result && Array.isArray(result.subscriptions)) {
                                             console.log("🔑 Sending subscriptions to UI:", result.subscriptions);
                                             const { subscriptions } = result;
@@ -105,15 +106,53 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const { vms } = result;
                                             this.postMessage(webviewId, { type: "updateVMs", VMs: vms, userId });
                                         }
-                                        if ('cost' in result) {
+                                        if ("cost" in result) {
                                             const { cost } = result;
                                             this.postMessage(webviewId, { type: "updateCostsAzure", provider, cost, userId });
                                         }
-                                        if ('usergroups' in result) {
+                                        if ("usergroups" in result) {
                                             const { usergroups } = result;
                                             const { azureGroups } = usergroups;
                                             console.log("azuregroup:", azureGroups);
                                             this.postMessage(webviewId, { type: "updateGroupsAzure", azureGroups, userId });
+                                        }
+                                    }
+
+                                    // ✅ Check if the *other* provider is already connected
+                                    const otherProvider = provider === "aws" ? "azure" : "aws";
+                                    const otherUserId = userSession[otherProvider];
+
+                                    if (otherUserId) {
+                                        try {
+                                            let otherInstances: any[] = [];
+
+                                            if (otherProvider === "aws") {
+                                                otherInstances = await this.cloudManager.refreshAWSInstances(otherUserId);
+                                            } else if (otherProvider === "azure") {
+                                                otherInstances = await this.cloudManager.refreshAzureInstances(otherUserId);
+                                            }
+
+                                            const formattedCurrent = (provider === "aws"
+                                                ? result.ec2instances || []
+                                                : result.vms || []
+                                            ).map(inst => ({
+                                                ...inst,
+                                                provider
+                                            }));
+
+                                            const formattedOther = otherInstances.map(inst => ({
+                                                ...inst,
+                                                provider: otherProvider
+                                            }));
+
+                                            const combinedInstances = [...formattedCurrent, ...formattedOther];
+
+                                            this.postMessage(webviewId, {
+                                                type: "updateAllInstances",
+                                                instances: combinedInstances
+                                            });
+                                        } catch (err) {
+                                            console.error("❌ Failed to refresh and combine instances for updateAllInstances:", err);
                                         }
                                     }
                                 }
@@ -1434,6 +1473,101 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                 listItem.appendChild(subList);
                                 vmList.appendChild(listItem);
+                            });
+                        }
+
+                        if (message.type === "updateAllInstances") {
+                            console.log("📦 Received combined AWS + Azure instances:", message.instances);
+
+                            const listContainer = document.querySelector("#allinstancesTable");
+                            listContainer.innerHTML = ""; // Clear previous entries
+
+                            if (!message.instances || message.instances.length === 0) {
+                                console.warn("⚠️ No combined instances received.");
+                                const noItem = document.createElement("li");
+                                noItem.id = "initialRow";
+                                noItem.style.color = "gray";
+                                noItem.style.listStyleType = "none";
+                                noItem.style.textAlign = "center";
+                                noItem.textContent = "No active instances found.";
+                                listContainer.appendChild(noItem);
+                                return;
+                            }
+
+                            message.instances.forEach(instance => {
+                                const listItem = document.createElement("li");
+                                listItem.className = "all-instance-entry";
+
+                                const groupName = instance.groupName || "N/A";
+                                let shutdownSchedule = instance.shutdownSchedule;
+
+                                if (!shutdownSchedule || shutdownSchedule === "N/A" || shutdownSchedule.trim() === "N/A | N/A") {
+                                    shutdownSchedule = "N/A";
+                                }
+
+                                // Format shutdown time
+                                if (shutdownSchedule.includes("|") && shutdownSchedule !== "N/A") {
+                                    const [start, end] = shutdownSchedule.split("|").map(s => s.trim());
+                                    shutdownSchedule = \`Start: \${start}, End: \${end}\`;
+                                }
+
+                                const statusText = (instance.status || instance.state || "Unknown").split(" ").pop().trim();
+
+                                // Main bullet: name + checkbox
+                                const mainContent = document.createElement("div");
+
+                                const checkbox = document.createElement("input");
+                                checkbox.type = "checkbox";
+                                checkbox.className = "all-checkbox";
+
+                                const hiddenId = document.createElement("span");
+                                hiddenId.className = "all-instance-id";
+                                hiddenId.style.display = "none";
+                                hiddenId.textContent = instance.id || instance.instanceId;
+
+                                const hiddenSub = document.createElement("span");
+                                hiddenSub.className = "all-subscription";
+                                hiddenSub.style.display = "none";
+                                hiddenSub.textContent = instance.subscriptionId || instance.accountId || "";
+
+                                const nameText = document.createElement("strong");
+                                nameText.textContent = instance.name || instance.instanceName || "N/A";
+
+                                mainContent.appendChild(checkbox);
+                                mainContent.appendChild(hiddenId);
+                                mainContent.appendChild(hiddenSub);
+                                mainContent.appendChild(document.createTextNode(" "));
+                                mainContent.appendChild(nameText);
+
+                                listItem.appendChild(mainContent);
+
+                                // Sub-bullets
+                                const subList = document.createElement("ul");
+
+                                const providerItem = document.createElement("li");
+                                providerItem.textContent = \`Provider: \${instance.provider || "Unknown"}\`;
+
+                                const regionItem = document.createElement("li");
+                                regionItem.textContent = \`Region: \${instance.region || "N/A"}\`;
+
+                                const groupItem = document.createElement("li");
+                                groupItem.textContent = \`Group: \${groupName}\`;
+
+                                const shutdownItem = document.createElement("li");
+                                shutdownItem.style.display = "none";
+                                shutdownItem.textContent = \`Shutdown Schedule: \${shutdownSchedule}\`;
+
+                                const statusItem = document.createElement("li");
+                                statusItem.textContent = \`Status: \${statusText}\`;
+
+                                subList.appendChild(providerItem);
+                                subList.appendChild(regionItem);
+                                subList.appendChild(groupItem);
+                                subList.appendChild(shutdownItem);
+                                subList.appendChild(statusItem);
+
+                                listItem.appendChild(subList);
+                                listContainer.appendChild(listItem);
                             });
                         }
 

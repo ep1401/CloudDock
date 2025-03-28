@@ -70,6 +70,32 @@
         .action-buttons button:hover {
             background-color: #4CAF50; /* Green on hover */
         }
+
+        #allinstancesTable {
+            padding-left: 0;
+            list-style-type: none;
+          }
+          
+          .all-instance-entry {
+            margin-bottom: 1rem;
+          }
+          
+          .all-instance-entry > div {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: bold;
+          }
+          
+          .all-instance-entry ul {
+            margin: 0.3rem 0 0 1rem;
+            padding-left: 1rem;
+            list-style-type: circle;
+          }
+          
+          .all-instance-entry li {
+            margin: 0.2rem 0;
+          }          
     </style>
 </head>
 <body>
@@ -78,26 +104,11 @@
 
     <div class="table-container">
         <h5>Active Instances</h5>
-        <table id="instancesTable">
-            <thead>
-                <tr>
-                    <th>Select</th>
-                    <th style="display: none;">Instance ID</th>
-                    <th>Name</th>
-                    <th>Provider</th>
-                    <th>Status</th>
-                    <th>Region</th>
-                    <th>Group</th>
-                    <th>Scheduled Downtime</th>
-                    <th style="display: none;">Subscription / Account</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr id="initialRow">
-                    <td colspan="8" style="text-align:center; color: gray;">Waiting for connection...</td>
-                </tr>
-            </tbody>
-        </table>
+        <ul id="allinstancesTable">
+          <li id="initialRow" style="text-align:center; color: gray; list-style-type: none;">
+            Waiting for connection...
+          </li>
+        </ul>
     </div>
 
     <p id="estimatedCost" style="margin-top: 15px; font-weight: bold; text-align: center;">Total Month Cost: ...</p>

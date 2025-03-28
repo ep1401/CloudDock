@@ -1766,18 +1766,35 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                         if (message.type === "stoppedResources") {
                             const stoppedInstances = message.stoppedInstances;
-                            console.log("🔹 Updating UI for stopped instances:", stoppedInstances);
+                            console.log("🔹 Updating UI for stopped AWS instances:", stoppedInstances);
 
+                            // 🔄 Update AWS-only table
+                            const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
                             stoppedInstances.forEach(instanceId => {
-                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
-
                                 instanceEntries.forEach(entry => {
                                     const idSpan = entry.querySelector(".instance-id");
-
                                     if (idSpan && idSpan.textContent.trim() === instanceId) {
                                         const statusItem = Array.from(entry.querySelectorAll("ul li"))
                                             .find(li => li.textContent.trim().startsWith("Status:"));
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: stopping";
+                                        }
+                                    }
+                                });
+                            });
 
+                            // 🔄 Update multi-table
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            stoppedInstances.forEach(instanceId => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId && provider === "aws") {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
                                         if (statusItem) {
                                             statusItem.textContent = "Status: stopping";
                                         }
@@ -1788,17 +1805,35 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         if (message.type === "stoppedVMs") {
                             const stoppedVMs = message.stoppedVMs;
-                            console.log("🔹 Updating UI for stopped VMs:", stoppedVMs);
+                            console.log("🔹 Updating UI for stopped Azure VMs:", stoppedVMs);
 
+                            // 🔄 Update Azure-only table
+                            const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
                             stoppedVMs.forEach(vm => {
-                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
-
                                 vmEntries.forEach(entry => {
                                     const idSpan = entry.querySelector(".vm-id");
                                     if (idSpan && idSpan.textContent.trim() === vm.vmId) {
                                         const statusItem = Array.from(entry.querySelectorAll("ul li"))
                                             .find(li => li.textContent.trim().startsWith("Status:"));
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: stopped";
+                                        }
+                                    }
+                                });
+                            });
 
+                            // 🔄 Update multi-table
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            stoppedVMs.forEach(vm => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId && provider === "azure") {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
                                         if (statusItem) {
                                             statusItem.textContent = "Status: stopped";
                                         }
@@ -1809,11 +1844,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         if (message.type === "terminatedResources") {
                             const terminatedInstances = message.terminatedInstances;
-                            console.log("🛑 Updating status for terminated instances:", terminatedInstances);
+                            console.log("🛑 Updating status for terminated AWS instances:", terminatedInstances);
 
+                            // 🔄 Update AWS-only table
+                            const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
                             terminatedInstances.forEach(instanceId => {
-                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
-
                                 instanceEntries.forEach(entry => {
                                     const idSpan = entry.querySelector(".instance-id");
 
@@ -1827,28 +1862,49 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     }
                                 });
                             });
+
+                            // 🔄 Update multi-table
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            terminatedInstances.forEach(instanceId => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId && provider === "aws") {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: terminated";
+                                        }
+                                    }
+                                });
+                            });
                         }
 
                         if (message.type === "terminatedVMs") {
                             const terminatedVMs = message.terminatedVMs;
-                            console.log("🛑 Removing terminated VMs from UI:", terminatedVMs);
+                            console.log("🛑 Removing terminated Azure VMs from UI:", terminatedVMs);
 
                             const vmList = document.querySelector("#vmsTable");
 
+                            // 🔄 Remove from Azure-only table
                             terminatedVMs.forEach(vm => {
                                 const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
 
                                 vmEntries.forEach(entry => {
                                     const idSpan = entry.querySelector(".vm-id");
                                     if (idSpan && idSpan.textContent.trim() === vm.vmId) {
-                                        entry.remove(); // ✅ Remove the entire list item
+                                        entry.remove();
                                     }
                                 });
                             });
 
-                            // ✅ Show "No active VMs" if the list is now empty
-                            const remainingEntries = document.querySelectorAll("#vmsTable .vm-entry");
-                            if (remainingEntries.length === 0) {
+                            // 🟪 Check if Azure VM list is now empty
+                            const remainingAzureEntries = document.querySelectorAll("#vmsTable .vm-entry");
+                            if (remainingAzureEntries.length === 0) {
                                 const noVMItem = document.createElement("li");
                                 noVMItem.id = "initialRow";
                                 noVMItem.style.color = "gray";
@@ -1857,22 +1913,66 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 noVMItem.textContent = "No active VMs found.";
                                 vmList.appendChild(noVMItem);
                             }
+
+                            // 🔄 Also remove from multi-table
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            terminatedVMs.forEach(vm => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId && provider === "azure") {
+                                        entry.remove();
+                                    }
+                                });
+                            });
+
+                            // 🟪 Show "No active instances" in multi-table if it's now empty
+                            const remainingMultiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            if (remainingMultiEntries.length === 0) {
+                                const noItem = document.createElement("li");
+                                noItem.id = "initialRow";
+                                noItem.style.color = "gray";
+                                noItem.style.listStyleType = "none";
+                                noItem.style.textAlign = "center";
+                                noItem.textContent = "No active instances found.";
+                                document.querySelector("#allinstancesTable").appendChild(noItem);
+                            }
                         }
 
                         if (message.type === "startedResources") {
                             const startedInstances = message.startedInstances;
-                            console.log("🚀 Updating status for started instances:", startedInstances);
+                            console.log("🚀 Updating status for started AWS instances:", startedInstances);
 
+                            // 🔄 Update in AWS-specific table
+                            const ec2Entries = document.querySelectorAll("#instancesTable .ec2-entry");
                             startedInstances.forEach(instanceId => {
-                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
-
-                                instanceEntries.forEach(entry => {
+                                ec2Entries.forEach(entry => {
                                     const idSpan = entry.querySelector(".instance-id");
-
                                     if (idSpan && idSpan.textContent.trim() === instanceId) {
                                         const statusItem = Array.from(entry.querySelectorAll("ul li"))
                                             .find(li => li.textContent.trim().startsWith("Status:"));
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: running";
+                                        }
+                                    }
+                                });
+                            });
 
+                            // 🔄 Also update in multi-table if it's present
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            startedInstances.forEach(instanceId => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId && provider === "aws") {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
                                         if (statusItem) {
                                             statusItem.textContent = "Status: running";
                                         }
@@ -1883,17 +1983,35 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         if (message.type === "startedVMs") {
                             const startedVMs = message.startedVMs;
-                            console.log("🚀 Updating status for started VMs:", startedVMs);
+                            console.log("🚀 Updating status for started Azure VMs:", startedVMs);
 
+                            // 🔄 Update in Azure-specific table
+                            const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
                             startedVMs.forEach(vm => {
-                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
-
                                 vmEntries.forEach(entry => {
                                     const idSpan = entry.querySelector(".vm-id");
                                     if (idSpan && idSpan.textContent.trim() === vm.vmId) {
                                         const statusItem = Array.from(entry.querySelectorAll("ul li"))
                                             .find(li => li.textContent.trim().startsWith("Status:"));
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: running";
+                                        }
+                                    }
+                                });
+                            });
 
+                            // 🔄 Also update in multi-table
+                            const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+                            startedVMs.forEach(vm => {
+                                multiEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".all-instance-id");
+                                    const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Provider:"));
+                                    const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId && provider === "azure") {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
                                         if (statusItem) {
                                             statusItem.textContent = "Status: running";
                                         }
@@ -2318,6 +2436,82 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             webviewId,
                             payload: { vms: selectedVMs }
                         });
+                    });
+
+                    document.getElementById("submitInstanceActionMulti").addEventListener("click", () => {
+                        const selectedAWS = [];
+                        const selectedAzure = [];
+                        console.log("🌐 Multi-cloud action requested...");
+
+                        const selectedAction = document.getElementById("instanceActionMulti").value;
+
+                        // Get all checked checkboxes in the combined instance list
+                        const checkboxes = document.querySelectorAll("#allinstancesTable .all-checkbox:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const entry = checkbox.closest(".all-instance-entry");
+
+                            const idSpan = entry.querySelector(".all-instance-id");
+                            const subSpan = entry.querySelector(".all-subscription");
+                            const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                .find(li => li.textContent.startsWith("Provider:"));
+
+                            const provider = providerItem?.textContent.replace("Provider:", "").trim();
+                            const instanceId = idSpan?.textContent.trim();
+                            const subscriptionId = subSpan?.textContent.trim();
+
+                            if (provider === "aws" && instanceId) {
+                                selectedAWS.push(instanceId);
+                            } else if (provider === "azure" && instanceId && subscriptionId) {
+                                selectedAzure.push({ vmId: instanceId, subscriptionId });
+                            }
+                        });
+
+                        if (selectedAWS.length === 0 && selectedAzure.length === 0) {
+                            alert("⚠️ No instances selected.");
+                            return;
+                        }
+
+                        let awsMessageType = "";
+                        let azureMessageType = "";
+
+                        switch (selectedAction) {
+                            case "start":
+                                awsMessageType = "startInstances";
+                                azureMessageType = "startVMs";
+                                break;
+                            case "stop":
+                                awsMessageType = "shutdownInstances";
+                                azureMessageType = "stopVMs";
+                                break;
+                            case "terminate":
+                                awsMessageType = "terminateInstances";
+                                azureMessageType = "terminateVMs";
+                                break;
+                            default:
+                                alert("❌ Invalid action selected.");
+                                return;
+                        }
+
+                        if (selectedAWS.length > 0) {
+                            console.log(\`🟦 Sending AWS \${selectedAction} request for:\`, selectedAWS);
+                            vscode.postMessage({
+                                type: awsMessageType,
+                                provider: "aws",
+                                webviewId,
+                                payload: { instanceIds: selectedAWS }
+                            });
+                        }
+
+                        if (selectedAzure.length > 0) {
+                            console.log(\`🟪 Sending Azure \${selectedAction} request for:\`, selectedAzure);
+                            vscode.postMessage({
+                                type: azureMessageType,
+                                provider: "azure",
+                                webviewId,
+                                payload: { vms: selectedAzure }
+                            });
+                        }
                     });
 
                     document.getElementById("submitGroupAction").addEventListener("click", () => {

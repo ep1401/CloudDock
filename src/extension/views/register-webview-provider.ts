@@ -1272,39 +1272,86 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "updateInstances") {
                             console.log("✅ Received instances:", message.instances);
 
-                            const tableBody = document.querySelector("#instancesTable tbody");
-                            tableBody.innerHTML = ""; // Clear existing rows
+                            const instanceList = document.querySelector("#instancesTable");
+                            instanceList.innerHTML = ""; // Clear existing items
 
                             if (!message.instances || message.instances.length === 0) {
                                 console.warn("⚠️ No instances received.");
-                                tableBody.innerHTML = "<tr><td colspan='6'>No instances found.</td></tr>";
+                                const noItem = document.createElement("li");
+                                noItem.id = "initialRow";
+                                noItem.style.color = "gray";
+                                noItem.style.listStyleType = "none";
+                                noItem.style.textAlign = "center";
+                                noItem.textContent = "No instances found.";
+                                instanceList.appendChild(noItem);
                                 return;
                             }
 
                             message.instances.forEach(instance => {
-                                const row = document.createElement("tr");
+                                const listItem = document.createElement("li");
+                                listItem.className = "ec2-entry";
 
-                                // Get group name and shutdown schedule
-                                const groupName = instance.groupName ? instance.groupName : "N/A";
+                                const groupName = instance.groupName || "N/A";
                                 let shutdownSchedule = instance.shutdownSchedule;
-    
-                                // Ensure that if it's "N/A | N/A", it just shows "N/A"
+
                                 if (!shutdownSchedule || shutdownSchedule === "N/A" || shutdownSchedule.trim() === "N/A | N/A") {
                                     shutdownSchedule = "N/A";
                                 }
 
-                                row.innerHTML = \`
-                                    <td><input type="checkbox" /></td>
-                                    <td style="display: none;">\${instance.instanceId}</td>
-                                    <td>\${instance.instanceName || "N/A"}</td>
-                                    <td>\${instance.state}</td>
-                                    <td>\${instance.region}</td>
-                                    <td>\${groupName}</td>
-                                    <td>\${shutdownSchedule}</td>
-                                \`;
-                                tableBody.appendChild(row);
+                                // Optionally format shutdown times
+                                if (shutdownSchedule.includes("|") && shutdownSchedule !== "N/A") {
+                                    const [start, end] = shutdownSchedule.split("|").map(s => s.trim());
+                                    shutdownSchedule = \`Start: \${start}, End: \${end}\`;
+                                }
+
+                                // Main row (checkbox + name)
+                                const mainContent = document.createElement("div");
+
+                                const checkbox = document.createElement("input");
+                                checkbox.type = "checkbox";
+                                checkbox.className = "ec2-checkbox";
+
+                                const hiddenId = document.createElement("span");
+                                hiddenId.className = "instance-id";
+                                hiddenId.style.display = "none";
+                                hiddenId.textContent = instance.instanceId;
+
+                                const nameText = document.createElement("strong");
+                                nameText.textContent = instance.instanceName || "N/A";
+
+                                mainContent.appendChild(checkbox);
+                                mainContent.appendChild(hiddenId);
+                                mainContent.appendChild(document.createTextNode(" "));
+                                mainContent.appendChild(nameText);
+
+                                listItem.appendChild(mainContent);
+
+                                // Sub-bullets
+                                const subList = document.createElement("ul");
+
+                                const regionItem = document.createElement("li");
+                                regionItem.textContent = \`Region: \${instance.region}\`;
+
+                                const groupItem = document.createElement("li");
+                                groupItem.textContent = \`Group: \${groupName}\`;
+
+                                const shutdownItem = document.createElement("li");
+                                shutdownItem.style.display = "none";
+                                shutdownItem.textContent = \`Shutdown Schedule: \${shutdownSchedule}\`;
+
+                                const statusItem = document.createElement("li");
+                                statusItem.textContent = \`Status: \${instance.state}\`;
+
+                                subList.appendChild(regionItem);
+                                subList.appendChild(groupItem);
+                                subList.appendChild(shutdownItem);
+                                subList.appendChild(statusItem);
+
+                                listItem.appendChild(subList);
+                                instanceList.appendChild(listItem);
                             });
                         }
+
                         if (message.type === "updateVMs") {
                             console.log("✅ Received VMs:", message.VMs);
 
@@ -1393,52 +1440,67 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "instanceCreated") {
                             let instanceId = message.instanceId || "Unknown ID";
                             let instanceName = message.instanceName || "N/A";
-                            const region = message.region;
+                            const region = message.region || "N/A";
 
-                            const table = document.getElementById("instancesTable").getElementsByTagName('tbody')[0];
+                            const instanceList = document.getElementById("instancesTable");
 
-                            // Remove initial waiting row if it's present
+                            // Remove the "Waiting for connection..." row if it's still there
                             const initialRow = document.getElementById("initialRow");
                             if (initialRow) {
                                 initialRow.remove();
                             }
 
-                            // Create a new row
-                            const newRow = table.insertRow();
+                            // Create list item for the new instance
+                            const listItem = document.createElement("li");
+                            listItem.className = "ec2-entry";
 
-                            // Checkbox column
-                            const selectCell = newRow.insertCell(0);
+                            // Main content: checkbox + instance name
+                            const mainContent = document.createElement("div");
+
                             const checkbox = document.createElement("input");
                             checkbox.type = "checkbox";
-                            selectCell.appendChild(checkbox);
-                            selectCell.classList.add("checkbox-column");
+                            checkbox.className = "ec2-checkbox";
 
-                            // Instance ID column
-                            const idCell = newRow.insertCell(1);
-                            idCell.textContent = instanceId;
-                            idCell.style.display = "none";
+                            const hiddenId = document.createElement("span");
+                            hiddenId.className = "instance-id";
+                            hiddenId.style.display = "none";
+                            hiddenId.textContent = instanceId;
 
-                            // Name column
-                            const name = newRow.insertCell(2);
-                            name.textContent = instanceName;
+                            const nameText = document.createElement("strong");
+                            nameText.textContent = instanceName;
 
-                            // Status column
-                            const statusCell = newRow.insertCell(3);
-                            statusCell.textContent = "running";
-                            statusCell.classList.add("status-column");
+                            mainContent.appendChild(checkbox);
+                            mainContent.appendChild(hiddenId);
+                            mainContent.appendChild(document.createTextNode(" "));
+                            mainContent.appendChild(nameText);
 
-                            // Region
-                            const regionCell = newRow.insertCell(4);
-                            regionCell.textContent = region;
+                            listItem.appendChild(mainContent);
 
-                            // Group column
-                            const groupCell = newRow.insertCell(5);
-                            groupCell.textContent = "N/A";
+                            // Sub-bullets: region, group, schedule, status
+                            const subList = document.createElement("ul");
 
-                            // Shutdown Schedule column
-                            const shutdownCell = newRow.insertCell(6);
-                            shutdownCell.textContent = "N/A";
+                            const regionItem = document.createElement("li");
+                            regionItem.textContent = \`Region: \${region}\`;
+
+                            const groupItem = document.createElement("li");
+                            groupItem.textContent = \`Group: N/A\`;
+
+                            const shutdownItem = document.createElement("li");
+                            shutdownItem.style.display = "none";
+                            shutdownItem.textContent = \`Shutdown Schedule: N/A\`;
+
+                            const statusItem = document.createElement("li");
+                            statusItem.textContent = \`Status: running\`;
+
+                            subList.appendChild(regionItem);
+                            subList.appendChild(groupItem);
+                            subList.appendChild(shutdownItem);
+                            subList.appendChild(statusItem);
+
+                            listItem.appendChild(subList);
+                            instanceList.appendChild(listItem);
                         }
+
 
                         if (message.type === "vmCreated") {
                             console.log("📩 Received instanceCreated message:", message);
@@ -1514,24 +1576,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             vmList.appendChild(listItem);
                         }
 
-
                         if (message.type === "groupDowntimeDeleted") {
                             console.log("✅ Downtime deleted for group:", message.groupNameDel);
 
                             const { groupNameDel } = message;
 
-                            // ✅ Update the shutdown schedule in the instances table
-                            const rows = document.querySelectorAll("#instancesTable tbody tr");
+                            const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
 
-                            rows.forEach(row => {
-                                const groupNameCell = row.cells[5]; // Assuming group name is in the 4th column
-                                const shutdownCell = row.cells[6]; // Assuming shutdown schedule is in the 5th column
+                            instanceEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim() === \`Group: \${groupNameDel}\`);
 
-                                if (groupNameCell && groupNameCell.textContent.trim() === groupNameDel) {
-                                    shutdownCell.textContent = "N/A"; // ✅ Reset to N/A
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && shutdownItem) {
+                                    shutdownItem.style.display = "none";
+                                    shutdownItem.textContent = "Shutdown Schedule: N/A";
                                 }
                             });
                         }
+
                         if (message.type === "groupDowntimeDeletedAzure") {
                             const { groupNameDel } = message;
 
@@ -1570,16 +1635,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("🔹 Updating UI for stopped instances:", stoppedInstances);
 
                             stoppedInstances.forEach(instanceId => {
-                                const rows = document.querySelectorAll("#instancesTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // Instance ID column
-                                    if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[3]; // Status column
-                                        statusCell.textContent = "stopping"; // ✅ Update status
+                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
+
+                                instanceEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".instance-id");
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId) {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: stopping";
+                                        }
                                     }
                                 });
                             });
                         }
+
                         if (message.type === "stoppedVMs") {
                             const stoppedVMs = message.stoppedVMs;
                             console.log("🔹 Updating UI for stopped VMs:", stoppedVMs);
@@ -1606,16 +1678,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("🛑 Updating status for terminated instances:", terminatedInstances);
 
                             terminatedInstances.forEach(instanceId => {
-                                const rows = document.querySelectorAll("#instancesTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // Instance ID column
-                                    if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[3]; // Status column
-                                        statusCell.textContent = "terminated"; // ✅ Set status
+                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
+
+                                instanceEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".instance-id");
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId) {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: terminated";
+                                        }
                                     }
                                 });
                             });
                         }
+
                         if (message.type === "terminatedVMs") {
                             const terminatedVMs = message.terminatedVMs;
                             console.log("🛑 Removing terminated VMs from UI:", terminatedVMs);
@@ -1651,16 +1730,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("🚀 Updating status for started instances:", startedInstances);
 
                             startedInstances.forEach(instanceId => {
-                                const rows = document.querySelectorAll("#instancesTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // Instance ID column
-                                    if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const statusCell = row.cells[3]; // Status column
-                                        statusCell.textContent = "running"; // ✅ Update status
+                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
+
+                                instanceEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".instance-id");
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId) {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: running";
+                                        }
                                     }
                                 });
                             });
                         }
+
                         if (message.type === "startedVMs") {
                             const startedVMs = message.startedVMs;
                             console.log("🚀 Updating status for started VMs:", startedVMs);
@@ -1686,16 +1772,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const { provider, groupname, instances, userId } = message;
 
                             instances.forEach(instanceId => {
-                                const rows = document.querySelectorAll("#instancesTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // Instance ID column
-                                    if (idCell && idCell.textContent.trim() === instanceId) {
-                                        const groupNameCell = row.cells[5]; // Assuming group name is in the 4th column
-                                        groupNameCell.textContent = groupname; // ✅ Update group name
+                                const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
+
+                                instanceEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".instance-id");
+
+                                    if (idSpan && idSpan.textContent.trim() === instanceId) {
+                                        const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Group:"));
+
+                                        if (groupItem) {
+                                            groupItem.textContent = \`Group: \${groupname}\`;
+                                        }
                                     }
                                 });
                             });
                         }
+
                         if (message.type === "groupCreatedAzure") {
                             const { provider, groupname, instances, userId } = message;
                             console.log("instances:", instances);
@@ -1825,22 +1918,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
 
                         if (message.type === "groupDowntimeSet") {
-                            const { provider, time, groupName, userId } = message; 
+                            const { provider, time, groupName, userId } = message;
 
                             console.log("✅ Reached message downtime set:", message);
 
-                            // ✅ Update the shutdown schedule in the instances table
-                            const rows = document.querySelectorAll("#instancesTable tbody tr");
-                            rows.forEach(row => {
-                                const groupNameCell = row.cells[5]; 
-                                const shutdownCell = row.cells[6]; 
+                            const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
 
-                                if (groupNameCell && groupNameCell.textContent.trim() === groupName) {
-                                    console.log("🔹 Start Time:", time.startTime, " | End Time:", time.endTime); // ✅ Debug log
-                                    shutdownCell.textContent = String(time.startTime) + " | " + String(time.endTime);
+                            instanceEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim() === \`Group: \${groupName}\`);
+
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && shutdownItem) {
+                                    console.log("🔹 Start Time:", time.startTime, "| End Time:", time.endTime);
+                                    shutdownItem.style.display = "none";
+                                    shutdownItem.textContent = \`Shutdown Schedule: \${time.startTime} | \${time.endTime}\`;
                                 }
                             });
                         }
+
                         if (message.type === "groupDowntimeSetAzure") {
                             const { provider, time, groupName, userId } = message;
 
@@ -1978,21 +2076,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         const selectedInstances = [];
                         console.log("🔹 Instance action requested...");
 
-                        // Get the selected action from the dropdown
                         const selectedAction = document.getElementById("instanceAction").value;
 
-                        // Get all checked checkboxes in the table
-                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
+                        // Get all checked checkboxes in the EC2 instance list
+                        const checkboxes = document.querySelectorAll("#instancesTable .ec2-checkbox:checked");
 
                         checkboxes.forEach(checkbox => {
-                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
-                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
+                            const entry = checkbox.closest(".ec2-entry");
+                            const idSpan = entry.querySelector(".instance-id");
+                            const instanceId = idSpan?.textContent.trim();
+
                             if (instanceId) {
                                 selectedInstances.push(instanceId);
                             }
                         });
 
-                        // Ensure at least one instance is selected
                         if (selectedInstances.length === 0) {
                             alert("No instances selected.");
                             return;
@@ -2018,7 +2116,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 alert("Invalid action selected.");
                                 return;
                         }
-                        console.log("Sending Message from slected action", messageType);
+
+                        console.log("Sending Message from selected action", messageType);
+
                         // ✅ Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
@@ -2090,21 +2190,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         const selectedInstances = [];
                         console.log("🔹 Group action requested...");
 
-                        // Get the selected action from the dropdown
                         const selectedAction = document.getElementById("groupAction").value;
 
-                        // Get all checked checkboxes in the table
-                        const checkboxes = document.querySelectorAll("#instancesTable tbody input[type='checkbox']:checked");
+                        // Get all checked checkboxes in the instance list
+                        const checkboxes = document.querySelectorAll("#instancesTable .ec2-checkbox:checked");
 
                         checkboxes.forEach(checkbox => {
-                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
-                            const instanceId = row.cells[1].textContent.trim(); // Extract the Instance ID from the second column
+                            const entry = checkbox.closest(".ec2-entry");
+                            const idSpan = entry.querySelector(".instance-id");
+                            const instanceId = idSpan?.textContent.trim();
+
                             if (instanceId) {
                                 selectedInstances.push(instanceId);
                             }
                         });
 
-                        // Ensure at least one instance is selected
                         if (selectedInstances.length === 0) {
                             alert("No instances selected.");
                             return;
@@ -2134,7 +2234,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 alert("Invalid action selected.");
                                 return;
                         }
-                        
+
                         // ✅ Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
@@ -2143,6 +2243,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             payload: { instanceIds: selectedInstances }
                         });
                     });
+
                     document.getElementById("submitGroupActionAzure").addEventListener("click", () => {
                         console.log("🔹 Azure group action requested...");
 

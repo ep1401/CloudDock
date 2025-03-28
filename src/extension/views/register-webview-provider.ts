@@ -1308,41 +1308,85 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "updateVMs") {
                             console.log("✅ Received VMs:", message.VMs);
 
-                            const tableBody = document.querySelector("#vmsTable tbody");
-                            tableBody.innerHTML = ""; // Clear existing rows
+                            const vmList = document.querySelector("#vmsTable");
+                            vmList.innerHTML = ""; // Clear existing entries
 
                             if (!message.VMs || message.VMs.length === 0) {
                                 console.warn("⚠️ No VMs received.");
-                                tableBody.innerHTML = "<tr><td colspan='7' style='text-align:center; color: gray;'>No active VMs found.</td></tr>";
+                                const noVMItem = document.createElement("li");
+                                noVMItem.id = "initialRow";
+                                noVMItem.style.color = "gray";
+                                noVMItem.style.listStyleType = "none";
+                                noVMItem.style.textAlign = "center";
+                                noVMItem.textContent = "No active VMs found.";
+                                vmList.appendChild(noVMItem);
                                 return;
                             }
 
                             message.VMs.forEach(vm => {
-                                const row = document.createElement("tr");
+                                const listItem = document.createElement("li");
+                                listItem.className = "vm-entry";
 
-                                // Placeholder values for Group and Shutdown Schedule (modify as needed)
-                                const groupName = vm.groupName ? vm.groupName : "N/A";
+                                const groupName = vm.groupName || "N/A";
                                 let shutdownSchedule = vm.shutdownSchedule;
-    
-                                // Ensure that if it's "N/A | N/A", it just shows "N/A"
+
                                 if (!shutdownSchedule || shutdownSchedule === "N/A" || shutdownSchedule.trim() === "N/A | N/A") {
                                     shutdownSchedule = "N/A";
                                 }
 
                                 let statusText = (vm.status || "Unknown").split(" ").pop().trim();
 
-                                row.innerHTML = \`
-                                    <td><input type="checkbox" /></td>
-                                    <td style="display: none;">\${vm.id}</td>
-                                    <td>\${vm.name || "N/A"}</td>
-                                    <td>\${statusText}</td>
-                                    <td>\${vm.region}</td>
-                                    <td>\${groupName}</td>
-                                    <td>\${shutdownSchedule}</td>
-                                    <td style="display: none;">\${vm.subscriptionId}</td>
-                                \`;
+                                // Main bullet point: name + checkbox
+                                const mainContent = document.createElement("div");
 
-                                tableBody.appendChild(row);
+                                const checkbox = document.createElement("input");
+                                checkbox.type = "checkbox";
+                                checkbox.className = "vm-checkbox";
+
+                                const hiddenId = document.createElement("span");
+                                hiddenId.className = "vm-id";
+                                hiddenId.style.display = "none";
+                                hiddenId.textContent = vm.id;
+
+                                const hiddenSub = document.createElement("span");
+                                hiddenSub.className = "vm-subscription";
+                                hiddenSub.style.display = "none";
+                                hiddenSub.textContent = vm.subscriptionId;
+
+                                const nameText = document.createElement("strong");
+                                nameText.textContent = vm.name || "N/A";
+
+                                mainContent.appendChild(checkbox);
+                                mainContent.appendChild(hiddenId);
+                                mainContent.appendChild(hiddenSub);
+                                mainContent.appendChild(document.createTextNode(" "));
+                                mainContent.appendChild(nameText);
+
+                                listItem.appendChild(mainContent);
+
+                                // Sub-bullet list
+                                const subList = document.createElement("ul");
+
+                                const regionItem = document.createElement("li");
+                                regionItem.textContent = \`Region: \${vm.region}\`;
+
+                                const groupItem = document.createElement("li");
+                                groupItem.textContent = \`Group: \${groupName}\`;
+
+                                const shutdownItem = document.createElement("li");
+                                shutdownItem.style.display = "none";
+                                shutdownItem.textContent = \`Shutdown Schedule: \${shutdownSchedule}\`;
+
+                                const statusItem = document.createElement("li");
+                                statusItem.textContent = \`Status: \${statusText}\`;
+
+                                subList.appendChild(regionItem);
+                                subList.appendChild(groupItem);
+                                subList.appendChild(shutdownItem);
+                                subList.appendChild(statusItem);
+
+                                listItem.appendChild(subList);
+                                vmList.appendChild(listItem);
                             });
                         }
 
@@ -1399,73 +1443,77 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         if (message.type === "vmCreated") {
                             console.log("📩 Received instanceCreated message:", message);
 
-                            let instanceId = message.instanceId || "Unknown ID";
-                            let instanceName = message.instanceName || "N/A";
-                            let status = message.status || "creating";
-                            let subscriptionId = message.subscriptionId || "N/A";
+                            const instanceId = message.instanceId || "Unknown ID";
+                            const instanceName = message.instanceName || "N/A";
+                            const status = message.status || "creating";
+                            const subscriptionId = message.subscriptionId || "N/A";
+                            const region = message.region || "N/A";
 
-                            const tableBody = document.querySelector("#vmsTable tbody");
+                            const vmList = document.querySelector("#vmsTable");
 
-                            // Remove the "No active VMs found" row if it exists
-                            const noVMsRow = tableBody.querySelector("tr td[colspan='7']");
+                            // Remove "No active VMs found" if present
+                            const noVMsRow = document.querySelector("#initialRow");
                             if (noVMsRow) {
-                                noVMsRow.parentElement.remove();
+                                noVMsRow.remove();
                             }
 
-                            // Create a new row
-                            const newRow = document.createElement("tr");
+                            // Create list item (acts like a row)
+                            const listItem = document.createElement("li");
+                            listItem.className = "vm-entry";
 
-                            // Checkbox column
-                            const selectCell = document.createElement("td");
+                            // Top-level: checkbox + name
+                            const mainContent = document.createElement("div");
+
                             const checkbox = document.createElement("input");
                             checkbox.type = "checkbox";
-                            selectCell.appendChild(checkbox);
-                            selectCell.classList.add("checkbox-column");
+                            checkbox.className = "vm-checkbox";
 
-                            // Hidden VM ID column
-                            const idCell = document.createElement("td");
-                            idCell.textContent = instanceId;
-                            idCell.style.display = "none";
+                            const hiddenId = document.createElement("span");
+                            hiddenId.className = "vm-id";
+                            hiddenId.style.display = "none";
+                            hiddenId.textContent = instanceId;
 
-                            // VM Name column
-                            const nameCell = document.createElement("td");
-                            nameCell.textContent = instanceName;
+                            const hiddenSub = document.createElement("span");
+                            hiddenSub.className = "vm-subscription";
+                            hiddenSub.style.display = "none";
+                            hiddenSub.textContent = subscriptionId;
 
-                            // Status column
-                            const statusCell = document.createElement("td");
-                            statusCell.textContent = status;
-                            statusCell.classList.add("status-column");
+                            const nameText = document.createElement("strong");
+                            nameText.textContent = instanceName;
 
-                            // Region column (Placeholder, assuming it's included in the message)
-                            const regionCell = document.createElement("td");
-                            regionCell.textContent = message.region || "N/A";
+                            mainContent.appendChild(checkbox);
+                            mainContent.appendChild(hiddenId);
+                            mainContent.appendChild(hiddenSub);
+                            mainContent.appendChild(document.createTextNode(" "));
+                            mainContent.appendChild(nameText);
 
-                            // Group column (Placeholder, update as needed)
-                            const groupCell = document.createElement("td");
-                            groupCell.textContent = "N/A";
+                            listItem.appendChild(mainContent);
 
-                            // Shutdown Schedule column (Placeholder, update as needed)
-                            const shutdownCell = document.createElement("td");
-                            shutdownCell.textContent = "N/A";
+                            // Sub-list: region, group, shutdown, status
+                            const subList = document.createElement("ul");
 
-                            // Subscription ID column (Hidden)
-                            const subscriptionCell = document.createElement("td");
-                            subscriptionCell.textContent = subscriptionId;
-                            subscriptionCell.style.display = "none";
+                            const regionItem = document.createElement("li");
+                            regionItem.textContent = \`Region: \${region}\`;
 
-                            // Append all cells to the new row
-                            newRow.appendChild(selectCell);
-                            newRow.appendChild(idCell);
-                            newRow.appendChild(nameCell);
-                            newRow.appendChild(statusCell);
-                            newRow.appendChild(regionCell);
-                            newRow.appendChild(groupCell);
-                            newRow.appendChild(shutdownCell);
-                            newRow.appendChild(subscriptionCell);
+                            const groupItem = document.createElement("li");
+                            groupItem.textContent = \`Group: N/A\`;
 
-                            // Append the new row to the table
-                            tableBody.appendChild(newRow);
+                            const shutdownItem = document.createElement("li");
+                            shutdownItem.style.display = "none";
+                            shutdownItem.textContent = \`Shutdown Schedule: N/A\`;
+
+                            const statusItem = document.createElement("li");
+                            statusItem.textContent = \`Status: \${status}\`;
+
+                            subList.appendChild(regionItem);
+                            subList.appendChild(groupItem);
+                            subList.appendChild(shutdownItem);
+                            subList.appendChild(statusItem);
+
+                            listItem.appendChild(subList);
+                            vmList.appendChild(listItem);
                         }
+
 
                         if (message.type === "groupDowntimeDeleted") {
                             console.log("✅ Downtime deleted for group:", message.groupNameDel);
@@ -1489,16 +1537,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log("✅ Downtime deleted for Azure group:", groupNameDel);
 
-                            // ✅ Find all rows in the Azure VMs table
-                            const rows = document.querySelectorAll("#vmsTable tbody tr");
+                            // ✅ Find all VM entries in the list
+                            const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
 
-                            rows.forEach(row => {
-                                const groupNameCell = row.cells[5];  // Column: Group
-                                const shutdownCell = row.cells[6];   // Column: Shutdown Schedule
+                            vmEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Group:"));
 
-                                if (groupNameCell && groupNameCell.textContent.trim() === groupNameDel) {
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && groupItem.textContent.trim() === \`Group: \${groupNameDel}\`) {
                                     console.log("🔁 Clearing shutdown schedule for VM in group:", groupNameDel);
-                                    shutdownCell.textContent = "N/A"; // ✅ Reset to N/A
+                                    if (shutdownItem) {
+                                        shutdownItem.display = "none";
+                                        shutdownItem.textContent = "Shutdown Schedule: N/A";
+                                    }
                                 }
                             });
                         }
@@ -1531,16 +1585,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("🔹 Updating UI for stopped VMs:", stoppedVMs);
 
                             stoppedVMs.forEach(vm => {
-                                const rows = document.querySelectorAll("#vmsTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // VM ID column
-                                    if (idCell && idCell.textContent.trim() === vm.vmId) {
-                                        const statusCell = row.cells[3]; // Status column
-                                        statusCell.textContent = "stopped"; // ✅ Update status
+                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
+
+                                vmEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".vm-id");
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId) {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: stopped";
+                                        }
                                     }
                                 });
                             });
                         }
+
                         if (message.type === "terminatedResources") {
                             const terminatedInstances = message.terminatedInstances;
                             console.log("🛑 Updating status for terminated instances:", terminatedInstances);
@@ -1556,28 +1616,35 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
                         }
-                            if (message.type === "terminatedVMs") {
-                                const terminatedVMs = message.terminatedVMs;
-                                console.log("🛑 Removing terminated VMs from UI:", terminatedVMs);
+                        if (message.type === "terminatedVMs") {
+                            const terminatedVMs = message.terminatedVMs;
+                            console.log("🛑 Removing terminated VMs from UI:", terminatedVMs);
 
-                                const tableBody = document.querySelector("#vmsTable tbody");
+                            const vmList = document.querySelector("#vmsTable");
 
-                                terminatedVMs.forEach(vm => {
-                                    const rows = document.querySelectorAll("#vmsTable tbody tr");
-                                    rows.forEach(row => {
-                                        const idCell = row.cells[1]; // VM ID column
-                                        if (idCell && idCell.textContent.trim() === vm.vmId) {
-                                            row.remove(); // ✅ Remove the row from the table
-                                        }
-                                    });
+                            terminatedVMs.forEach(vm => {
+                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
+
+                                vmEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".vm-id");
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId) {
+                                        entry.remove(); // ✅ Remove the entire list item
+                                    }
                                 });
+                            });
 
-                                // If no rows are left, display the "No active VMs found" message
-                                if (tableBody.children.length === 0) {
-                                    tableBody.innerHTML = "<tr><td colspan='7' style='text-align:center; color: gray;'>No active VMs found.</td></tr>";
-                                }
-
+                            // ✅ Show "No active VMs" if the list is now empty
+                            const remainingEntries = document.querySelectorAll("#vmsTable .vm-entry");
+                            if (remainingEntries.length === 0) {
+                                const noVMItem = document.createElement("li");
+                                noVMItem.id = "initialRow";
+                                noVMItem.style.color = "gray";
+                                noVMItem.style.listStyleType = "none";
+                                noVMItem.style.textAlign = "center";
+                                noVMItem.textContent = "No active VMs found.";
+                                vmList.appendChild(noVMItem);
                             }
+                        }
 
                         if (message.type === "startedResources") {
                             const startedInstances = message.startedInstances;
@@ -1599,12 +1666,17 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             console.log("🚀 Updating status for started VMs:", startedVMs);
 
                             startedVMs.forEach(vm => {
-                                const rows = document.querySelectorAll("#vmsTable tbody tr");
-                                rows.forEach(row => {
-                                    const idCell = row.cells[1]; // VM ID column
-                                    if (idCell && idCell.textContent.trim() === vm.vmId) {
-                                        const statusCell = row.cells[3]; // Status column
-                                        statusCell.textContent = "running"; 
+                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
+
+                                vmEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".vm-id");
+                                    if (idSpan && idSpan.textContent.trim() === vm.vmId) {
+                                        const statusItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Status:"));
+
+                                        if (statusItem) {
+                                            statusItem.textContent = "Status: running";
+                                        }
                                     }
                                 });
                             });
@@ -1626,18 +1698,24 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                         if (message.type === "groupCreatedAzure") {
                             const { provider, groupname, instances, userId } = message;
-                            console.log("instances: ", instances);
-                            console.log("groupname: ", groupname);
-                            instances.forEach(({ vmId }) => {
-                                const rows = document.querySelectorAll("#vmsTable tbody tr");
+                            console.log("instances:", instances);
+                            console.log("groupname:", groupname);
 
-                                rows.forEach(row => {
-                                const idCell = row.cells[1]; // VM ID column (hidden)
-                                if (idCell && idCell.textContent.trim() === vmId) {
-                                    console.log("reached groupCreatedAzure: ", vmId);
-                                    const groupNameCell = row.cells[5]; // Group column
-                                    groupNameCell.textContent = groupname; // ✅ Set new group name
-                                }
+                            instances.forEach(({ vmId }) => {
+                                const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
+
+                                vmEntries.forEach(entry => {
+                                    const idSpan = entry.querySelector(".vm-id");
+                                    if (idSpan && idSpan.textContent.trim() === vmId) {
+                                        console.log("reached groupCreatedAzure:", vmId);
+
+                                        const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                            .find(li => li.textContent.trim().startsWith("Group:"));
+
+                                        if (groupItem) {
+                                            groupItem.textContent = \`Group: \${groupname}\`;
+                                        }
+                                    }
                                 });
                             });
                         }
@@ -1768,19 +1846,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log("✅ Reached Azure downtime set message:", message);
 
-                            // ✅ Find all rows in the Azure VMs table
-                            const rows = document.querySelectorAll("#vmsTable tbody tr");
+                            const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
 
-                            rows.forEach(row => {
-                                const groupNameCell = row.cells[5];  // Column: Group
-                                const shutdownCell = row.cells[6];   // Column: Shutdown Schedule
+                            vmEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim() === \`Group: \${groupName}\`);
 
-                                if (groupNameCell && groupNameCell.textContent.trim() === groupName) {
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && shutdownItem) {
                                     console.log("🔹 Azure VM match found. Start Time:", time.startTime, "| End Time:", time.endTime);
-                                    shutdownCell.textContent = String(time.startTime) + " | " + String(time.endTime);
+                                    shutdownItem.display = "none";
+                                    shutdownItem.textContent = \`Shutdown Schedule:\${time.startTime} | \${time.endTime}\`;
                                 }
                             });
                         }
+
 
                         if (message.type === "updateCosts") {
                             const { provider, cost, userId } = message;
@@ -1950,23 +2032,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         const selectedVMs = [];
                         console.log("🔹 Azure VM action requested...");
 
-                        // Get the selected action from the dropdown
                         const selectedAction = document.getElementById("instanceActionAzure").value;
 
-                        // Get all checked checkboxes in the VM table
-                        const checkboxes = document.querySelectorAll("#vmsTable tbody input[type='checkbox']:checked");
+                        // Get all checked checkboxes in the VM list
+                        const checkboxes = document.querySelectorAll("#vmsTable .vm-checkbox:checked");
 
                         checkboxes.forEach(checkbox => {
-                            const row = checkbox.closest("tr"); // Find the row containing this checkbox
-                            const vmId = row.cells[1].textContent.trim(); // Extract the VM ID from the second column
-                            const subscriptionId = row.cells[7].textContent.trim(); // Extract Subscription ID from the hidden column
+                            const vmEntry = checkbox.closest(".vm-entry"); // Get parent list item
+
+                            const vmIdSpan = vmEntry.querySelector(".vm-id");
+                            const subscriptionSpan = vmEntry.querySelector(".vm-subscription");
+
+                            const vmId = vmIdSpan?.textContent.trim();
+                            const subscriptionId = subscriptionSpan?.textContent.trim();
 
                             if (vmId && subscriptionId) {
                                 selectedVMs.push({ vmId, subscriptionId });
                             }
                         });
 
-                        // Ensure at least one VM is selected
                         if (selectedVMs.length === 0) {
                             alert("⚠️ No VMs selected.");
                             return;
@@ -1998,7 +2082,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             type: messageType,
                             provider: "azure",
                             webviewId,
-                            payload: { vms: selectedVMs } // Now sending an array of { vmId, subscriptionId }
+                            payload: { vms: selectedVMs }
                         });
                     });
 
@@ -2064,24 +2148,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const selectedInstances = [];
 
-                        // Get the selected action from the dropdown
                         const selectedAction = document.getElementById("groupActionAzure").value;
 
-                        // Get all checked checkboxes in the Azure VMs table
-                        const checkboxes = document.querySelectorAll("#vmsTable tbody input[type='checkbox']:checked");
+                        // Get all checked checkboxes in the Azure VM list
+                        const checkboxes = document.querySelectorAll("#vmsTable .vm-checkbox:checked");
 
                         checkboxes.forEach(checkbox => {
-                            const row = checkbox.closest("tr");
-                            const instanceId = row.cells[1].textContent.trim();  // VM ID
-                            const subscriptionId = row.cells[7].textContent.trim(); // Subscription ID (hidden column)
+                            const vmEntry = checkbox.closest(".vm-entry");
+
+                            const idSpan = vmEntry.querySelector(".vm-id");
+                            const subSpan = vmEntry.querySelector(".vm-subscription");
+
+                            const instanceId = idSpan?.textContent.trim();
+                            const subscriptionId = subSpan?.textContent.trim();
 
                             if (instanceId && subscriptionId) {
                                 selectedInstances.push({ vmId: instanceId, subscriptionId });
                             }
                         });
 
-
-                        // Ensure at least one instance is selected
                         if (selectedInstances.length === 0) {
                             alert("No Azure VMs selected.");
                             return;
@@ -2108,9 +2193,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             type: messageType,
                             provider: "azure",
                             webviewId,
-                            payload: { instances: selectedInstances } // not just instanceIds anymore
+                            payload: { instances: selectedInstances }
                         });
                     });
+
 
                     document.getElementById("submitDownAction").addEventListener("click", () => {
                         console.log("🔹 Downtime action requested...");

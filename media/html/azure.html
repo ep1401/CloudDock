@@ -62,6 +62,33 @@
         .action-buttons button:hover {
             background-color: #4CAF50;
         }
+
+        #vmsTable {
+            padding-left: 0;
+            list-style-type: none;
+          }
+          
+          .vm-entry {
+            margin-bottom: 1rem;
+          }
+          
+          .vm-entry > div {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: bold;
+          }
+          
+          .vm-entry ul {
+            margin: 0.3rem 0 0 1rem; /* only a small indent */
+            padding-left: 1rem;
+            list-style-type: circle;
+          }
+          
+          .vm-entry li {
+            margin: 0.2rem 0;
+          }
+          
     </style>   
 </head>
 <body>
@@ -105,26 +132,13 @@
 
     <div class="table-container">
         <h5>Active Virtual Machines</h5>
-        <table id="vmsTable">
-            <thead>
-                <tr>
-                    <th>Select</th>
-                    <th style="display: none;">VM ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Region</th>
-                    <th>Group</th>
-                    <th>Shutdown Schedule</th>
-                    <th style="display: none;">Subscription</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr id="initialRow">
-                    <td colspan="6" style="text-align:center; color: gray;">Waiting for connection...</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+        <ul id="vmsTable">
+          <li id="initialRow" style="text-align:center; color: gray; list-style-type: none;">
+            Waiting for connection...
+          </li>
+        </ul>
+      </div>
+      
 
     <p id="azureCost" style="margin-top: 15px; font-weight: bold;">Month Cost: ...</p>
     <!-- Action Buttons Below the Table -->

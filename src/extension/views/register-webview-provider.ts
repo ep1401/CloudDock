@@ -498,6 +498,55 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                         break;
 
+                    case "refreshAllInstances":
+                        console.log("📩 Received request to refresh ALL instances");
+
+                        const userIdAwsAll = userSession["aws"];
+                        const userIdAzureAll = userSession["azure"];
+
+                        if (!userIdAwsAll && !userIdAzureAll) {
+                            console.error("❌ No authenticated AWS or Azure user found. Please authenticate first.");
+                            window.showErrorMessage("Please authenticate with at least one provider first!");
+                            return;
+                        }
+
+                        try {
+                            window.showInformationMessage("Refreshing All Instances...");
+                            
+                            const awsInstances = userIdAwsAll
+                                ? await this.cloudManager.refreshAWSInstances(userIdAwsAll)
+                                : [];
+                            const azureInstances = userIdAzureAll
+                                ? await this.cloudManager.refreshAzureInstances(userIdAzureAll)
+                                : [];
+
+                            const formattedAwsInstances = awsInstances.map(inst => ({
+                                ...inst,
+                                provider: "aws"
+                            }));
+
+                            const formattedAzureInstances = azureInstances.map(inst => ({
+                                ...inst,
+                                provider: "azure"
+                            }));
+
+                            const combinedInstances = [...formattedAwsInstances, ...formattedAzureInstances];
+
+                            this.postMessage(webviewId, {
+                                type: "updateAllInstances",
+                                instances: combinedInstances
+                            });
+
+                            console.log("✅ Successfully refreshed all instances");
+
+                        } catch (error) {
+                            console.error("❌ Error refreshing all instances:", error);
+                            window.showErrorMessage(`Error refreshing instances: ${error}`);
+                        }
+
+                        break;
+
+
                     case "terminateInstances":
                         console.log("📩 Received terminateInstances message:", data); // Debugging log
 
@@ -2844,6 +2893,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         console.log("📤 Sent refreshazureinstances message");
                     });
+
+                    document.getElementById("refreshInstances").addEventListener("click", () => {
+                        console.log("🔄 Refresh All Instances button clicked");
+
+                        vscode.postMessage({
+                            type: "refreshAllInstances",
+                            webviewId
+                        });
+
+                        console.log("📤 Sent refreshAllInstances message");
+                    });
+
 
                     document.getElementById("submitInstanceAction").addEventListener("click", () => {
                         const selectedInstances = [];

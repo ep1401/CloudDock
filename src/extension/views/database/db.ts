@@ -200,54 +200,59 @@ export const addInstancesToGroup = async (
 
     const groupId = groupData.group_id;
 
-    // ✅ Step 2: Verify user has access to the group
-    let userGroupIds: string[] = [];
+    // ✅ Step 2: Check if group is in multi_sessions table
+    const { data: multiEntry, error: multiError } = await supabase
+      .from("multi_sessions")
+      .select("group_id")
+      .eq("group_id", groupId)
+      .maybeSingle();
 
-    if (provider === "both") {
-      const { aws: awsUserId, azure: azureUserId } = userId as { aws: string; azure: string };
+    if (multiError) throw new Error(`Error checking multi_sessions: ${multiError.message}`);
 
-      const { data: awsSession, error: awsError } = await supabase
-        .from("aws_sessions")
-        .select("group_ids")
-        .eq("aws_id", awsUserId)
-        .maybeSingle();
+    const isMultiGroup = !!multiEntry;
 
-      const { data: azureSession, error: azureError } = await supabase
-        .from("azure_sessions")
-        .select("group_ids")
-        .eq("azure_id", azureUserId)
-        .maybeSingle();
+    // ✅ Step 3: Validation for non-multi groups
+    if (!isMultiGroup) {
+      const hasAwsInstances = instanceList.aws && instanceList.aws.length > 0;
+      const hasAzureInstances = instanceList.azure && instanceList.azure.length > 0;
 
-      if (awsError || azureError) {
-        throw new Error(`Error checking user group access: ${awsError?.message || azureError?.message}`);
+      if (hasAwsInstances && hasAzureInstances) {
+        throw new Error("❌ Cannot add both AWS and Azure instances to a single-provider group.");
       }
 
-      userGroupIds = [
-        ...(awsSession?.group_ids || []),
-        ...(azureSession?.group_ids || [])
-      ];
-    } else {
-      const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
-      const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
+      // Check user session access for the respective provider
+      if (hasAwsInstances) {
+        const awsId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
+        const { data: awsSession, error: awsError } = await supabase
+          .from("aws_sessions")
+          .select("group_ids")
+          .eq("aws_id", awsId)
+          .maybeSingle();
 
-      const { data: sessionData, error: sessionError } = await supabase
-        .from(sessionTable)
-        .select("group_ids")
-        .eq(sessionColumn, userId as string)
-        .maybeSingle();
+        if (awsError) throw new Error(`Error checking AWS session access: ${awsError.message}`);
 
-      if (sessionError) {
-        throw new Error(`Error fetching session data from ${sessionTable}: ${sessionError.message}`);
+        if (!awsSession?.group_ids?.includes(groupId)) {
+          throw new Error("❌ AWS user does not have access to this group.");
+        }
       }
 
-      userGroupIds = sessionData?.group_ids || [];
+      if (hasAzureInstances) {
+        const azureId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
+        const { data: azureSession, error: azureError } = await supabase
+          .from("azure_sessions")
+          .select("group_ids")
+          .eq("azure_id", azureId)
+          .maybeSingle();
+
+        if (azureError) throw new Error(`Error checking Azure session access: ${azureError.message}`);
+
+        if (!azureSession?.group_ids?.includes(groupId)) {
+          throw new Error("❌ Azure user does not have access to this group.");
+        }
+      }
     }
 
-    if (!userGroupIds.includes(groupId)) {
-      throw new Error(`User does not have access to group '${groupName}'.`);
-    }
-
-    // ✅ Step 3: Upsert instances
+    // ✅ Step 4: Upsert instances
     const upsertInstances = async (
       instances?: string[],
       instanceTable?: string,
@@ -282,13 +287,13 @@ export const addInstancesToGroup = async (
     };
 
     // ✅ Handle AWS
-    if (provider === "aws" || provider === "both") {
+    if (instanceList.aws?.length) {
       const awsId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
       await upsertInstances(instanceList.aws, "aws_instances", "aws_id", undefined, awsId);
     }
 
     // ✅ Handle Azure
-    if (provider === "azure" || provider === "both") {
+    if (instanceList.azure?.length) {
       const azureId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
       await upsertInstances(instanceList.azure, "azure_instances", "azure_id", subscriptionIds, azureId);
     }
@@ -299,6 +304,7 @@ export const addInstancesToGroup = async (
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
 
 export const removeInstancesFromGroup = async (
   provider: "aws" | "azure" | "both",

@@ -511,7 +511,7 @@ export class CloudManager {
         }
         }
 
-    async setGroupDowntime(provider: "aws" | "azure" | "both", userId: string, groupName: string) {
+    async setGroupDowntime(provider: "aws" | "azure" | "both", groupName: string) {
         try {
             // ✅ Prompt user for start time
             const startTime = await this.promptForInput("Enter Start Time", "YYYY-MM-DD HH:MM");

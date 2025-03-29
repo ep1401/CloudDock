@@ -1513,7 +1513,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         try {
                             // ✅ Call the general `setGroupDowntime` function in CloudManager
-                            const time = await this.cloudManager.setGroupDowntime(provider, userIdSetDowntime, groupName);
+                            const time = await this.cloudManager.setGroupDowntime(provider, groupName);
 
                             console.log(`✅ Successfully set downtime for ${provider.toUpperCase()} group '${groupName}'.`);
 
@@ -1541,6 +1541,79 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error setting group downtime: ${error}`);
                         }
                         break;
+
+                    case "setGroupDowntimeMulti":
+                        console.log(`🔹 Received setGroupDowntimeMulti request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in setGroupDowntimeMulti request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const multiSessionSet = this.userSessions.get(webviewId);
+                        const userIdAwsSet = multiSessionSet?.["aws"];
+                        const userIdAzureSet = multiSessionSet?.["azure"];
+
+                        if (!userIdAwsSet || !userIdAzureSet) {
+                            console.error("❌ Both AWS and Azure users must be authenticated to set multi-cloud group downtime.");
+                            window.showErrorMessage("Please authenticate with both AWS and Azure before setting downtime.");
+                            return;
+                        }
+
+                        if (!payload || !payload.groupName) {
+                            console.warn("❌ Invalid downtime request: Missing group name.");
+                            window.showErrorMessage("Missing group name for setting multi-cloud downtime.");
+                            return;
+                        }
+
+                        const { groupName: multiGroupName } = payload;
+
+                        console.log(`📤 Setting downtime for multi-cloud group '${multiGroupName}'.`);
+                        window.showInformationMessage(`Setting downtime for multi-cloud group '${multiGroupName}'.`);
+
+                        try {
+                            const time = await this.cloudManager.setGroupDowntime("both", multiGroupName); 
+
+                            if (!time) return;
+
+                            console.log(`✅ Downtime set for multi-cloud group '${multiGroupName}':`, time);
+
+                            // Post to AWS UI
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeSet",
+                                provider: "aws",
+                                time,
+                                groupName: multiGroupName,
+                                userId: userIdAwsSet
+                            });
+
+                            // Post to Azure UI
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeSetAzure",
+                                provider: "azure",
+                                time,
+                                groupName: multiGroupName,
+                                userId: userIdAzureSet
+                            });
+
+                            // ✅ Post to Multi UI
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeSetMulti",
+                                provider: "both",
+                                time,
+                                groupName: multiGroupName,
+                                userIdAws: userIdAwsSet,
+                                userIdAzure: userIdAzureSet
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error setting downtime for multi-cloud group '${multiGroupName}':`, error);
+                            window.showErrorMessage(`Error setting multi-cloud group downtime: ${error}`);
+                        }
+
+                        break;
+
                     case "deleteGroupDowntime":
                         console.log(`🔹 Received deleteGroupDowntime request from webview ${webviewId}:`, data);
 
@@ -1606,6 +1679,80 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             window.showErrorMessage(`Error deleting group downtime: ${error}`);
                         }
                         break;
+
+                    case "deleteGroupDowntimeMulti":
+                        console.log(`🔹 Received deleteGroupDowntimeMulti request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in deleteGroupDowntimeMulti request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const sessionMultiDelete = this.userSessions.get(webviewId);
+                        const userIdAwsDelete = sessionMultiDelete?.["aws"];
+                        const userIdAzureDelete = sessionMultiDelete?.["azure"];
+
+                        if (!userIdAwsDelete || !userIdAzureDelete) {
+                            console.error("❌ Both AWS and Azure users must be authenticated to delete multi-group downtime.");
+                            window.showErrorMessage("Please authenticate with both AWS and Azure first!");
+                            return;
+                        }
+
+                        if (!payload || !payload.groupName) {
+                            console.warn("❌ Invalid downtime delete request: Missing group name.");
+                            window.showErrorMessage("Missing group name for deleting downtime.");
+                            return;
+                        }
+
+                        const multiGroupNameDelete = payload.groupName;
+
+                        console.log(`📤 Deleting downtime for MULTI-CLOUD group '${multiGroupNameDelete}'.`);
+                        window.showInformationMessage(`Deleting downtime for group '${multiGroupNameDelete}'.`);
+
+                        try {
+                            const success = await this.cloudManager.removeGroupDowntime(multiGroupNameDelete);
+
+                            if (!success) {
+                                console.warn(`⚠️ No downtime found for group '${multiGroupNameDelete}', or deletion failed.`);
+                                window.showErrorMessage(`No downtime found for group '${multiGroupNameDelete}', or deletion failed.`);
+                                return;
+                            }
+
+                            console.log(`✅ Successfully removed downtime for MULTI-CLOUD group '${multiGroupNameDelete}'.`);
+
+                            // 🔁 Notify AWS tab
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeDeleted",
+                                provider: "aws",
+                                groupNameDel: multiGroupNameDelete,
+                                userId: userIdAwsDelete
+                            });
+
+                            // 🔁 Notify Azure tab
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeDeletedAzure",
+                                provider: "azure",
+                                groupNameDel: multiGroupNameDelete,
+                                userId: userIdAzureDelete
+                            });
+
+                            // 🌐 Notify Multi-tab
+                            this.postMessage(webviewId, {
+                                type: "groupDowntimeDeletedMulti",
+                                provider: "both",
+                                groupNameDel: multiGroupNameDelete,
+                                userIdAws: userIdAwsDelete,
+                                userIdAzure: userIdAzureDelete
+                            });
+
+                        } catch (error) {
+                            console.error(`❌ Error deleting downtime for multi-cloud group '${multiGroupNameDelete}':`, error);
+                            window.showErrorMessage(`Error deleting multi-cloud group downtime: ${error}`);
+                        }
+
+                        break;
+
                 }
             } catch (error) {
                 console.error(`❌ Error handling message ${type} for ${provider}:`, error);
@@ -2225,6 +2372,28 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             });
                         }
 
+                        if (message.type === "groupDowntimeDeletedMulti") {
+                            console.log("✅ Downtime deleted for multi-cloud group:", message.groupNameDel);
+
+                            const { groupNameDel } = message;
+
+                            const instanceEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+
+                            instanceEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim() === \`Group: \${groupNameDel}\`);
+
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && shutdownItem) {
+                                    shutdownItem.style.display = "none";
+                                    shutdownItem.textContent = "Shutdown Schedule: N/A";
+                                    console.log("🔹 Cleared shutdown schedule for multi-cloud instance in group:", groupNameDel);
+                                }
+                            });
+                        }
+
                         if (message.type === "groupDowntimeDeletedAzure") {
                             const { groupNameDel } = message;
 
@@ -2804,6 +2973,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             });
                         }
 
+                        if (message.type === "groupDowntimeSetMulti") {
+                            const { groupName, time } = message;
+
+                            console.log("🌐 Received multi-cloud downtime update:", message);
+
+                            const allEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+
+                            allEntries.forEach(entry => {
+                                const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim() === \`Group: \${groupName}\`);
+
+                                const shutdownItem = Array.from(entry.querySelectorAll("ul li"))
+                                    .find(li => li.textContent.trim().startsWith("Shutdown Schedule:"));
+
+                                if (groupItem && shutdownItem) {
+                                    console.log("🔄 Updating shutdown time for multi-cloud group entry...");
+                                    shutdownItem.style.display = "none";
+                                    shutdownItem.textContent = \`Shutdown Schedule: \${time.startTime} | \${time.endTime}\`;
+                                }
+                            });
+                        }
 
                         if (message.type === "updateCosts") {
                             const { provider, cost, userId } = message;
@@ -3373,6 +3563,41 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         });
                     });
 
+                    document.getElementById("submitDownActionMulti").addEventListener("click", () => {
+                        console.log("🔹 Multi-cloud downtime action requested...");
+
+                        // Get the selected multi-cloud group from the dropdown
+                        const selectedGroup = document.getElementById("groupNameMulti").value;
+                        if (!selectedGroup) {
+                            alert("No multi-cloud group selected.");
+                            return;
+                        }
+
+                        // Get the selected action from the dropdown
+                        const selectedAction = document.getElementById("groupSelectMulti").value;
+                        let messageType = "";
+
+                        switch (selectedAction) {
+                            case "setdown":
+                                messageType = "setGroupDowntimeMulti";
+                                break;
+                            case "deldown":
+                                messageType = "deleteGroupDowntimeMulti";
+                                break;
+                            default:
+                                alert("Invalid multi-cloud action selected.");
+                                return;
+                        }
+
+                        console.log("🔹 Sending multi-cloud downtime action:", messageType);
+                        // ✅ Send message to VS Code extension
+                        vscode.postMessage({
+                            type: messageType,
+                            provider: "both",
+                            webviewId,
+                            payload: { groupName: selectedGroup }
+                        });
+                    });
 
                 });
 

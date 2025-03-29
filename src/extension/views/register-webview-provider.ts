@@ -165,6 +165,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                                 awsId,
                                                 azureId
                                             });
+
+                                            const sanitizeCost = (val: any): number => {
+                                                const parsed = parseFloat((val || "0").toString().replace(/[^0-9.]/g, ""));
+                                                return isNaN(parsed) ? 0 : parsed;
+                                            };
+                                            
+                                            const currentCost = sanitizeCost(result.cost);
+                                            const otherCost = sanitizeCost(await this.cloudManager.getMonthlyCostUnified(otherProvider, otherUserId));
+                                            
+                                            // 🧠 Add string values as floats and format as a string again
+                                            const totalCost = (currentCost + otherCost).toFixed(2);
+                                            
+                                            // 💰 Post total combined cost
+                                            this.postMessage(webviewId, {
+                                                type: "updateCombinedCost",
+                                                provider: "both",
+                                                totalCost,
+                                                awsId,
+                                                azureId
+                                            });
+                                            
                                         } catch (err) {
                                             console.error("❌ Failed to refresh and combine instances for updateAllInstances:", err);
                                         }
@@ -512,7 +533,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         try {
                             window.showInformationMessage("Refreshing All Instances...");
-                            
+
                             const awsInstances = userIdAwsAll
                                 ? await this.cloudManager.refreshAWSInstances(userIdAwsAll)
                                 : [];
@@ -2794,6 +2815,18 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             document.getElementById("azureCost").textContent = "Month Cost: " + cost;
                         }
+                        if (message.type === "updateCombinedCost") {
+                            const { totalCost } = message;
+
+                            const costDisplay = document.getElementById("estimatedCost");
+                            if (!costDisplay) {
+                                console.warn("⚠️ Could not find element with ID 'estimatedCost' to display combined cost.");
+                                return;
+                            }
+
+                            costDisplay.textContent = \`Total Month Cost: $\${totalCost}\`;
+                        }
+
                     });
 
                     document.getElementById("region-aws").addEventListener("change", function () {

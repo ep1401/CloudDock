@@ -587,7 +587,23 @@ export class CloudManager {
           console.error("❌ Error fetching multi-cloud group names:", error);
           return [];
         }
-    }   
+    } 
+    
+    async getMonthlyCostUnified(provider: "aws" | "azure", userId: string): Promise<string> {
+        try {
+            if (provider === "aws") {
+                return await this.awsManager.getTotalMonthlyCost(userId);
+            } else if (provider === "azure") {
+                return await this.azureManager.getMonthlyCost(userId);
+            } else {
+                throw new Error(`Unsupported provider: ${provider}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error fetching monthly cost for ${provider.toUpperCase()}:`, error);
+            return "0.00"; // Default to 0 if error occurs
+        }
+    }
+    
 }
 
 

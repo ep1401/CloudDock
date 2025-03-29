@@ -34,6 +34,20 @@ export const createInstanceGroup = async (
       .insert([{ group_id: groupId, group_name: groupName }]);
     if (insertGroupError) throw new Error(`Error creating group: ${insertGroupError.message}`);
 
+    // ✅ Multi-cloud session insert
+    if (provider === "both" && userIds.aws && userIds.azure) {
+      const { error: multiError } = await supabase
+        .from("multi_sessions")
+        .insert([
+          {
+            group_id: groupId,
+            aws_id: userIds.aws,
+            azure_id: userIds.azure
+          }
+        ]);
+      if (multiError) throw new Error(`Error creating multi-session mapping: ${multiError.message}`);
+    }
+
     // ✅ Add group ID to each session and update/insert instances
     const updateSessionsAndInstances = async (
       cloud: "aws" | "azure",
@@ -331,71 +345,89 @@ export const removeInstancesFromGroup = async (
   }
 };
 
-
 export const getUserGroups = async (
   awsId: string | null,
   azureId: string | null
 ): Promise<{ awsGroups: string[]; azureGroups: string[] }> => {
   try {
-      let awsGroups: string[] = [];
-      let azureGroups: string[] = [];
+    let awsGroups: string[] = [];
+    let azureGroups: string[] = [];
 
-      // ✅ Fetch AWS group names if awsId is provided
-      if (awsId) {
-          const { data: awsData, error: awsError } = await supabase
-              .from("aws_sessions")
-              .select("group_ids")
-              .eq("aws_id", awsId)
-              .maybeSingle();
+    // ✅ Fetch multi-cloud group IDs (used for filtering)
+    const { data: multiSessions, error: multiError } = await supabase
+      .from("multi_sessions")
+      .select("group_id");
 
-          if (awsError) {
-              throw new Error(`Error fetching AWS groups: ${awsError.message}`);
-          }
+    if (multiError) {
+      throw new Error(`Error fetching multi-cloud group IDs: ${multiError.message}`);
+    }
 
-          if (awsData?.group_ids?.length) {
-              const { data: groupNames, error: groupError } = await supabase
-                  .from("instance_groups")
-                  .select("group_name")
-                  .in("group_id", awsData.group_ids);
+    const multiGroupIds = new Set(multiSessions?.map(m => m.group_id) || []);
 
-              if (groupError) {
-                  throw new Error(`Error retrieving AWS group names: ${groupError.message}`);
-              }
+    // ✅ Fetch AWS group names if awsId is provided
+    if (awsId) {
+      const { data: awsData, error: awsError } = await supabase
+        .from("aws_sessions")
+        .select("group_ids")
+        .eq("aws_id", awsId)
+        .maybeSingle();
 
-              awsGroups = groupNames.map(g => g.group_name);
-          }
+      if (awsError) {
+        throw new Error(`Error fetching AWS groups: ${awsError.message}`);
       }
 
-      // ✅ Fetch Azure group names if azureId is provided
-      if (azureId) {
-          const { data: azureData, error: azureError } = await supabase
-              .from("azure_sessions")
-              .select("group_ids")
-              .eq("azure_id", azureId)
-              .maybeSingle();
+      if (awsData?.group_ids?.length) {
+        const filteredAwsGroupIds = awsData.group_ids.filter((id: string) => !multiGroupIds.has(id));
 
-          if (azureError) {
-              throw new Error(`Error fetching Azure groups: ${azureError.message}`);
+        if (filteredAwsGroupIds.length > 0) {
+          const { data: groupNames, error: groupError } = await supabase
+            .from("instance_groups")
+            .select("group_name")
+            .in("group_id", filteredAwsGroupIds);
+
+          if (groupError) {
+            throw new Error(`Error retrieving AWS group names: ${groupError.message}`);
           }
 
-          if (azureData?.group_ids?.length) {
-              const { data: groupNames, error: groupError } = await supabase
-                  .from("instance_groups")
-                  .select("group_name")
-                  .in("group_id", azureData.group_ids);
+          awsGroups = groupNames.map(g => g.group_name);
+        }
+      }
+    }
 
-              if (groupError) {
-                  throw new Error(`Error retrieving Azure group names: ${groupError.message}`);
-              }
+    // ✅ Fetch Azure group names if azureId is provided
+    if (azureId) {
+      const { data: azureData, error: azureError } = await supabase
+        .from("azure_sessions")
+        .select("group_ids")
+        .eq("azure_id", azureId)
+        .maybeSingle();
 
-              azureGroups = groupNames.map(g => g.group_name);
-          }
+      if (azureError) {
+        throw new Error(`Error fetching Azure groups: ${azureError.message}`);
       }
 
-      return { awsGroups, azureGroups };
+      if (azureData?.group_ids?.length) {
+        const filteredAzureGroupIds = azureData.group_ids.filter((id: string) => !multiGroupIds.has(id));
+
+        if (filteredAzureGroupIds.length > 0) {
+          const { data: groupNames, error: groupError } = await supabase
+            .from("instance_groups")
+            .select("group_name")
+            .in("group_id", filteredAzureGroupIds);
+
+          if (groupError) {
+            throw new Error(`Error retrieving Azure group names: ${groupError.message}`);
+          }
+
+          azureGroups = groupNames.map(g => g.group_name);
+        }
+      }
+    }
+
+    return { awsGroups, azureGroups };
   } catch (error) {
-      console.error("❌ Error in getUserGroups:", error);
-      throw new Error(error instanceof Error ? error.message : String(error));
+    console.error("❌ Error in getUserGroups:", error);
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
 

@@ -688,8 +688,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         try {
                             // ✅ Call the general `createGroup` function in CloudManager
-                            const groupname = await this.cloudManager.createGroup(provider, userIdCreateGroup, instancesNewGroup, []);
-
+                            const groupname = await this.cloudManager.createGroup(
+                                provider,
+                                { [provider]: userIdCreateGroup },
+                                { [provider]: instancesNewGroup },
+                                [] // Optional subscription IDs (only used if provider is "azure" or "both")
+                              );
+                              
                             if (!groupname) {
                                 return;
                             }
@@ -748,10 +753,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             try {
                                 const groupname = await this.cloudManager.createGroup(
                                     "azure",
-                                    azureUserId,
-                                    instanceIdsCreate,
-                                    subscriptionIds
-                                );
+                                    { azure: azureUserId }, // userIds object
+                                    { azure: instanceIdsCreate }, // instanceLists object
+                                    subscriptionIds // Azure-specific
+                                  );
+                                  
                         
                                 if (!groupname) {
                                     return;
@@ -779,7 +785,81 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 console.error(`❌ Error creating Azure group for user ${azureUserId}:`, error);
                                 window.showErrorMessage(`Error creating Azure group: ${error}`);
                             }
-                            break;                        
+                            break; 
+                    
+                    case "createMultiGroup":
+                        console.log(`🔹 Received createMultiGroup request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in createMultiGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const userSessionMulti = this.userSessions.get(webviewId);
+                        const userIdAwsCreate = userSessionMulti?.["aws"];
+                        const userIdAzureCreate = userSessionMulti?.["azure"];
+
+                        if (!userIdAwsCreate || !userIdAzureCreate) {
+                            console.error("❌ Both AWS and Azure users must be connected to create a multi-cloud group.");
+                            window.showErrorMessage("Please connect to both AWS and Azure before creating a multi-cloud group.");
+                            return;
+                        }
+
+                        if (!payload || typeof payload !== "object") {
+                            console.error("❌ Invalid payload for createMultiGroup.");
+                            window.showErrorMessage("Invalid multi-group creation request.");
+                            return;
+                        }
+
+                        const { aws, azure }: { aws: string[]; azure: { vmId: string; subscriptionId: string }[] } = payload;
+
+                        if ((!Array.isArray(aws) || aws.length === 0) && (!Array.isArray(azure) || azure.length === 0)) {
+                            console.warn("❌ No AWS or Azure instances provided.");
+                            window.showErrorMessage("Please select at least one AWS or Azure instance to create a group.");
+                            return;
+                        }
+
+                        try {
+                            const awsInstanceIds = aws;
+                            const azureInstanceIds = azure.map((vm) => vm.vmId);
+                            const azureSubs = azure.map((vm) => vm.subscriptionId);
+
+                            console.log("📤 Creating multi-cloud group with:", {
+                                awsInstanceIds,
+                                azureInstanceIds
+                            });
+
+                            // ✅ Create group with both user IDs and instance IDs
+                            const groupName = await this.cloudManager.createGroup(
+                                "both",
+                                { aws: userIdAwsCreate, azure: userIdAzureCreate },
+                                { aws: awsInstanceIds, azure: azureInstanceIds },
+                                azureSubs
+                            );
+
+                            if (!groupName) return;
+
+                            // ✅ Notify frontend
+                            this.postMessage(webviewId, {
+                                type: "multiGroupCreated",
+                                provider: "both",
+                                groupname: groupName,
+                                instances: {
+                                    aws: awsInstanceIds,
+                                    azure: azureInstanceIds
+                                },
+                                userIdAws: userIdAwsCreate,
+                                userIdAzure: userIdAzureCreate
+                            });
+
+                        } catch (error) {
+                            console.error("❌ Error creating multi-group:", error);
+                            window.showErrorMessage(`Error creating multi-cloud group: ${error}`);
+                        }
+
+                        break;
+                                          
                     case "addToGroup":
                         console.log(`🔹 Received addToGroup request from webview ${webviewId}:`, data);
 
@@ -887,7 +967,81 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 window.showErrorMessage(`Error adding Azure instances to group: ${error}`);
                             }
                         
-                            break;                        
+                            break;   
+                            
+                    case "addToMultiGroup":
+                        console.log(`🔹 Received addToMultiGroup request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in addToMultiGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const sessionMultiAdd = this.userSessions.get(webviewId);
+                        const userIdAwsAdd = sessionMultiAdd?.["aws"];
+                        const userIdAzureAdd = sessionMultiAdd?.["azure"];
+
+                        if (!userIdAwsAdd || !userIdAzureAdd) {
+                            console.error("❌ Both AWS and Azure users must be connected to add instances to a multi-cloud group.");
+                            window.showErrorMessage("Please connect to both AWS and Azure before performing this action.");
+                            return;
+                        }
+
+                        if (!payload || typeof payload !== "object") {
+                            console.error("❌ Invalid payload for addToMultiGroup.");
+                            window.showErrorMessage("Invalid request format.");
+                            return;
+                        }
+
+                        const awsInstances: string[] = payload.aws;
+                        const azureVMs: { vmId: string; subscriptionId: string }[] = payload.azure;
+
+                        if ((!Array.isArray(awsInstances) || awsInstances.length === 0) && (!Array.isArray(azureVMs) || azureVMs.length === 0)) {
+                            console.warn("❌ No AWS or Azure instances provided.");
+                            window.showErrorMessage("Please select at least one AWS or Azure instance to add to a group.");
+                            return;
+                        }
+
+                        try {
+                            const awsInstanceIds: string[] = awsInstances;
+                            const azureInstanceIds: string[] = azureVMs.map(vm => vm.vmId);
+                            const azureSubs: string[] = azureVMs.map(vm => vm.subscriptionId);
+
+                            console.log("📤 Adding to multi-cloud group:", {
+                                awsInstanceIds,
+                                azureInstanceIds
+                            });
+
+                            // ✅ Call updated CloudManager logic
+                            const groupName = await this.cloudManager.addInstancesToGroup(
+                                "both",
+                                { aws: userIdAwsAdd, azure: userIdAzureAdd },
+                                { aws: awsInstanceIds, azure: azureInstanceIds },
+                                azureSubs
+                            );
+
+                            if (!groupName) return;
+
+                            // ✅ Notify UI
+                            this.postMessage(webviewId, {
+                                type: "multiGroupCreated",
+                                provider: "both",
+                                groupname: groupName,
+                                instances: {
+                                    aws: awsInstanceIds,
+                                    azure: azureInstanceIds
+                                },
+                                userIdAws: userIdAwsAdd,
+                                userIdAzure: userIdAzureAdd
+                            });                            
+
+                        } catch (error) {
+                            console.error("❌ Error updating multi-cloud group:", error);
+                            window.showErrorMessage(`Error adding to group: ${error}`);
+                        }
+                        break;
+
                     case "removeFromGroup":
                         if (!webviewId) {
                             console.error("❌ Missing webviewId in removeFromGroup request.");
@@ -986,6 +1140,84 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
 
                         break;
+
+                    case "removeFromMultiGroup":
+                        console.log(`🔹 Received removeFromMultiGroup request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in removeFromMultiGroup request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        const sessionMultiRemove = this.userSessions.get(webviewId);
+                        const userIdAwsRemove = sessionMultiRemove?.["aws"];
+                        const userIdAzureRemove = sessionMultiRemove?.["azure"];
+
+                        if (!userIdAwsRemove || !userIdAzureRemove) {
+                            console.error("❌ Both AWS and Azure users must be connected to remove instances from a multi-cloud group.");
+                            window.showErrorMessage("Please connect to both AWS and Azure before performing this action.");
+                            return;
+                        }
+
+                        if (!payload || typeof payload !== "object") {
+                            console.error("❌ Invalid payload for removeFromMultiGroup.");
+                            window.showErrorMessage("Invalid request format.");
+                            return;
+                        }
+
+                        const {
+                            aws: awsInstancesToRemove,
+                            azure: azureInstancesToRemove
+                        }: {
+                            aws: string[];
+                            azure: { vmId: string; subscriptionId: string }[];
+                        } = payload;
+
+                        if ((!Array.isArray(awsInstancesToRemove) || awsInstancesToRemove.length === 0) &&
+                            (!Array.isArray(azureInstancesToRemove) || azureInstancesToRemove.length === 0)) {
+                            console.warn("❌ No AWS or Azure instances provided.");
+                            window.showErrorMessage("Please select at least one AWS or Azure instance to remove from a group.");
+                            return;
+                        }
+
+                        try {
+                            const azureVmIds = azureInstancesToRemove.map(vm => vm.vmId);
+
+                            console.log("📤 Removing from multi-cloud group:", {
+                                awsInstanceIds: awsInstancesToRemove,
+                                azureVmIds
+                            });
+
+                            // ✅ Call CloudManager logic to remove from group
+                            const groupName = await this.cloudManager.removeInstancesFromGroup(
+                                "both",
+                                { aws: userIdAwsRemove, azure: userIdAzureRemove },
+                                { aws: awsInstancesToRemove, azure: azureVmIds }
+                            );
+
+                            if (!groupName) return;
+
+                            // ✅ Notify frontend
+                            this.postMessage(webviewId, {
+                                type: "multiGroupCreated",
+                                provider: "both",
+                                groupname: groupName,
+                                instances: {
+                                    aws: awsInstancesToRemove,
+                                    azure: azureVmIds
+                                },
+                                userIdAws: userIdAwsRemove,
+                                userIdAzure: userIdAzureRemove
+                            });
+
+                        } catch (error) {
+                            console.error("❌ Error removing instances from multi-cloud group:", error);
+                            window.showErrorMessage(`Error removing instances from group: ${error}`);
+                        }
+
+                        break;
+
 
                     case "setGroupDowntime":
                         console.log(`🔹 Received setGroupDowntime request from webview ${webviewId}:`, data);
@@ -2065,6 +2297,46 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             });
                         }
 
+                        if (message.type === "multiGroupCreated") {
+                            console.log("🌀 Received multiGroupCreated message:", message);
+
+                            const groupname = message.groupname;
+                            const instances = message.instances;
+
+                            if (!instances || typeof instances !== "object") {
+                                console.error("❌ No 'instances' object found in message.");
+                                return;
+                            }
+
+                            const awsInstances = Array.isArray(instances.aws) ? instances.aws : [];
+                            const azureInstances = Array.isArray(instances.azure) ? instances.azure : [];
+
+                            console.log("🔹 Group name:", groupname);
+                            console.log("🔹 AWS Instances:", awsInstances);
+                            console.log("🔹 Azure Instances:", azureInstances);
+
+                            const allEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
+
+                            allEntries.forEach(entry => {
+                                const idSpan = entry.querySelector(".all-instance-id");
+                                const currentId = idSpan?.textContent?.trim();
+
+                                if (currentId && (awsInstances.includes(currentId) || azureInstances.includes(currentId))) {
+                                    console.log(\`✅ Matched instance ID '\${currentId}' in combined list\`);
+
+                                    const groupItem = Array.from(entry.querySelectorAll("ul li"))
+                                        .find(li => li.textContent.trim().startsWith("Group:"));
+
+                                    if (groupItem) {
+                                        console.log(\`✏️ Updating group name for '\${currentId}' to '\${groupname}'\`);
+                                        groupItem.textContent = \`Group: \${groupname}\`;
+                                    } else {
+                                        console.warn(\`⚠️ Could not find group list item for instance '\${currentId}'\`);
+                                    }
+                                }
+                            });
+                        }
+
                         if (message.type === "updateGroupsAWS") {
                             console.log("✅ Received AWS user groups:", message.awsGroups);
 
@@ -2623,6 +2895,67 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             provider: "azure",
                             webviewId,
                             payload: { instances: selectedInstances }
+                        });
+                    });
+
+                    document.getElementById("submitGroupActionMulti").addEventListener("click", () => {
+                        console.log("🔹 Multi-cloud group action requested...");
+
+                        const selectedAction = document.getElementById("groupActionMulti").value;
+
+                        const selectedAWS = [];
+                        const selectedAzure = [];
+
+                        const checkboxes = document.querySelectorAll("#allinstancesTable .all-checkbox:checked");
+
+                        checkboxes.forEach(checkbox => {
+                            const entry = checkbox.closest(".all-instance-entry");
+
+                            const idSpan = entry.querySelector(".all-instance-id");
+                            const subSpan = entry.querySelector(".all-subscription");
+                            const providerItem = Array.from(entry.querySelectorAll("ul li"))
+                                .find(li => li.textContent.trim().startsWith("Provider:"));
+                            const provider = providerItem?.textContent.replace("Provider:", "").trim();
+
+                            const instanceId = idSpan?.textContent.trim();
+                            const subscriptionId = subSpan?.textContent.trim();
+
+                            if (provider === "aws" && instanceId) {
+                                selectedAWS.push(instanceId);
+                            } else if (provider === "azure" && instanceId && subscriptionId) {
+                                selectedAzure.push({ vmId: instanceId, subscriptionId });
+                            }
+                        });
+
+                        if (selectedAWS.length === 0 && selectedAzure.length === 0) {
+                            alert("⚠️ No instances selected.");
+                            return;
+                        }
+
+                        let messageType = "";
+
+                        switch (selectedAction) {
+                            case "create":
+                                messageType = "createMultiGroup";
+                                break;
+                            case "add":
+                                messageType = "addToMultiGroup";
+                                break;
+                            case "remove":
+                                messageType = "removeFromMultiGroup";
+                                break;
+                            default:
+                                alert("❌ Invalid group action selected.");
+                                return;
+                        }
+
+                        vscode.postMessage({
+                            type: messageType,
+                            webviewId,
+                            payload: {
+                                aws: selectedAWS, // array of instanceIds
+                                azure: selectedAzure // array of { vmId, subscriptionId }
+                            }
                         });
                     });
 

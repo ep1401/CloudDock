@@ -11,18 +11,13 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const createInstanceGroup = async (
   provider: "aws" | "azure" | "both",
-  userId: string,
+  userIds: { aws?: string; azure?: string },
   groupName: string,
   instanceList: { aws?: string[]; azure?: string[] },
-  subscriptionIds?: string[] // Only used for Azure
+  subscriptionIds?: string[]
 ): Promise<string> => {
   try {
-    // Determine table/column names
-    const sessionTable = provider === "aws" ? "aws_sessions" : "azure_sessions";
-    const instanceTable = provider === "aws" ? "aws_instances" : "azure_instances";
-    const sessionColumn = provider === "aws" ? "aws_id" : "azure_id";
-
-    // ✅ Step 1: Check if group already exists
+    // ✅ Check group name uniqueness
     const { data: existingGroup, error: groupError } = await supabase
       .from("instance_groups")
       .select("group_id")
@@ -32,130 +27,107 @@ export const createInstanceGroup = async (
     if (groupError) throw new Error(`Error checking group name: ${groupError.message}`);
     if (existingGroup) throw new Error(`A group with the name '${groupName}' already exists.`);
 
-    // ✅ Step 2: Create group
+    // ✅ Create group
     const groupId = uuidv4();
     const { error: insertGroupError } = await supabase
       .from("instance_groups")
       .insert([{ group_id: groupId, group_name: groupName }]);
-
     if (insertGroupError) throw new Error(`Error creating group: ${insertGroupError.message}`);
 
-    // ✅ Step 3: Handle user session
-    const { data: sessionData, error: sessionError } = await supabase
-      .from(sessionTable)
-      .select("group_ids")
-      .eq(sessionColumn, userId)
-      .maybeSingle();
-
-    if (sessionError) throw new Error(`Error fetching session: ${sessionError.message}`);
-
-    const updatedGroupIds = sessionData
-      ? [...new Set([...sessionData.group_ids, groupId])]
-      : [groupId];
-
-    if (sessionData) {
-      const { error: updateSessionError } = await supabase
-        .from(sessionTable)
-        .update({ group_ids: updatedGroupIds })
-        .eq(sessionColumn, userId);
-
-      if (updateSessionError) {
-        throw new Error(`Error updating session: ${updateSessionError.message}`);
-      }
-    } else {
-      const { error: insertSessionError } = await supabase
-        .from(sessionTable)
-        .insert([{ [sessionColumn]: userId, group_ids: updatedGroupIds }]);
-
-      if (insertSessionError) {
-        throw new Error(`Error inserting session: ${insertSessionError.message}`);
-      }
-    }
-
-    // ✅ Step 4: Insert or update instances
-    const updateInstances = async (
-      instances?: string[],
+    // ✅ Add group ID to each session and update/insert instances
+    const updateSessionsAndInstances = async (
+      cloud: "aws" | "azure",
+      ids: string[],
       subs?: string[]
     ) => {
-      if (!instances || instances.length === 0) return;
+      const sessionTable = cloud === "aws" ? "aws_sessions" : "azure_sessions";
+      const instanceTable = cloud === "aws" ? "aws_instances" : "azure_instances";
+      const idColumn = cloud === "aws" ? "aws_id" : "azure_id";
+      const userId = userIds[cloud];
 
-      const { data: existingInstances, error: fetchError } = await supabase
+      if (!userId || ids.length === 0) return;
+
+      // ✅ Update session with new group_id
+      const { data: sessionData, error: sessionErr } = await supabase
+        .from(sessionTable)
+        .select("group_ids")
+        .eq(idColumn, userId)
+        .maybeSingle();
+
+      if (sessionErr) throw new Error(`Error reading session for ${cloud}: ${sessionErr.message}`);
+
+      const updatedGroups = sessionData
+        ? [...new Set([...sessionData.group_ids, groupId])]
+        : [groupId];
+
+      if (sessionData) {
+        await supabase
+          .from(sessionTable)
+          .update({ group_ids: updatedGroups })
+          .eq(idColumn, userId);
+      } else {
+        await supabase
+          .from(sessionTable)
+          .insert([{ [idColumn]: userId, group_ids: updatedGroups }]);
+      }
+
+      // ✅ Handle instance updates/inserts
+      const { data: existing, error: fetchErr } = await supabase
         .from(instanceTable)
         .select("instance_id")
-        .in("instance_id", instances);
+        .in("instance_id", ids);
 
-      if (fetchError) throw new Error(`Error fetching instances: ${fetchError.message}`);
+      if (fetchErr) throw new Error(`Error fetching ${cloud} instances: ${fetchErr.message}`);
 
-      const existingInstanceIds = new Set(
-        existingInstances.map(instance => instance.instance_id)
-      );
+      const existingIds = new Set(existing.map(inst => inst.instance_id));
 
-      const newInstances = instances
-        .filter(id => !existingInstanceIds.has(id))
-        .map((instanceId, index) => {
-          const base = {
-            instance_id: instanceId,
+      const newEntries = ids
+        .filter(id => !existingIds.has(id))
+        .map((id, index) => {
+          const base: any = {
+            instance_id: id,
             group_id: groupId,
             group_name: groupName,
-            [sessionColumn]: userId
+            [idColumn]: userId
           };
-
-          if (provider === "azure" && subs?.[index]) {
-            return { ...base, sub_name: subs[index] };
+          if (cloud === "azure" && subs?.[index]) {
+            base.sub_name = subs[index];
           }
-
           return base;
         });
 
-      const updatePromises = instances
-        .filter(id => existingInstanceIds.has(id))
-        .map((instanceId, index) => {
-          const updateData: any = {
-            group_id: groupId,
-            group_name: groupName
-          };
-
-          if (provider === "azure" && subs?.[index]) {
-            updateData.sub_name = subs[index];
+      const updatePromises = ids
+        .filter(id => existingIds.has(id))
+        .map((id, index) => {
+          const update: any = { group_id: groupId, group_name: groupName };
+          if (cloud === "azure" && subs?.[index]) {
+            update.sub_name = subs[index];
           }
-
-          return supabase
-            .from(instanceTable)
-            .update(updateData)
-            .eq("instance_id", instanceId);
+          return supabase.from(instanceTable).update(update).eq("instance_id", id);
         });
 
-      // Insert new instances
-      if (newInstances.length > 0) {
-        const { error: insertError } = await supabase
-          .from(instanceTable)
-          .insert(newInstances);
-
-        if (insertError) {
-          throw new Error(`Error inserting instances: ${insertError.message}`);
-        }
+      if (newEntries.length > 0) {
+        await supabase.from(instanceTable).insert(newEntries);
       }
 
-      // Update existing instances
       await Promise.all(updatePromises);
     };
 
     // ✅ Apply updates by provider
     if (provider === "aws" || provider === "both") {
-      await updateInstances(instanceList.aws);
+      await updateSessionsAndInstances("aws", instanceList.aws || []);
     }
 
     if (provider === "azure" || provider === "both") {
-      await updateInstances(instanceList.azure, subscriptionIds);
+      await updateSessionsAndInstances("azure", instanceList.azure || [], subscriptionIds);
     }
 
-    return `Group '${groupName}' created and instances updated successfully.`;
+    return groupName;
   } catch (error) {
     console.error("Error in createInstanceGroup:", error);
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
-
 
 // Function to fetch instance groups
 export const getInstanceGroups = async (
@@ -196,10 +168,10 @@ export const getInstanceGroups = async (
 
 export const addInstancesToGroup = async (
   provider: "aws" | "azure" | "both",
-  userId: string,
+  userId: string | { aws: string; azure: string },
   groupName: string,
   instanceList: { aws?: string[]; azure?: string[] },
-  subscriptionIds?: string[] // Only used for Azure
+  subscriptionIds?: string[]
 ): Promise<string> => {
   try {
     // ✅ Step 1: Get group ID
@@ -218,16 +190,18 @@ export const addInstancesToGroup = async (
     let userGroupIds: string[] = [];
 
     if (provider === "both") {
+      const { aws: awsUserId, azure: azureUserId } = userId as { aws: string; azure: string };
+
       const { data: awsSession, error: awsError } = await supabase
         .from("aws_sessions")
         .select("group_ids")
-        .eq("aws_id", userId)
+        .eq("aws_id", awsUserId)
         .maybeSingle();
 
       const { data: azureSession, error: azureError } = await supabase
         .from("azure_sessions")
         .select("group_ids")
-        .eq("azure_id", userId)
+        .eq("azure_id", azureUserId)
         .maybeSingle();
 
       if (awsError || azureError) {
@@ -245,7 +219,7 @@ export const addInstancesToGroup = async (
       const { data: sessionData, error: sessionError } = await supabase
         .from(sessionTable)
         .select("group_ids")
-        .eq(sessionColumn, userId)
+        .eq(sessionColumn, userId as string)
         .maybeSingle();
 
       if (sessionError) {
@@ -264,16 +238,17 @@ export const addInstancesToGroup = async (
       instances?: string[],
       instanceTable?: string,
       sessionColumn?: string,
-      subs?: string[]
+      subs?: string[],
+      userKey?: string
     ) => {
-      if (!instances || instances.length === 0 || !instanceTable || !sessionColumn) return;
+      if (!instances || instances.length === 0 || !instanceTable || !sessionColumn || !userKey) return;
 
       const instanceData = instances.map((instanceId, index) => {
         const base = {
           instance_id: instanceId,
           group_id: groupId,
           group_name: groupName,
-          [sessionColumn]: userId
+          [sessionColumn]: userKey
         };
 
         if (instanceTable === "azure_instances" && subs?.[index]) {
@@ -294,12 +269,14 @@ export const addInstancesToGroup = async (
 
     // ✅ Handle AWS
     if (provider === "aws" || provider === "both") {
-      await upsertInstances(instanceList.aws, "aws_instances", "aws_id");
+      const awsId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
+      await upsertInstances(instanceList.aws, "aws_instances", "aws_id", undefined, awsId);
     }
 
-    // ✅ Handle Azure with sub_name support
+    // ✅ Handle Azure
     if (provider === "azure" || provider === "both") {
-      await upsertInstances(instanceList.azure, "azure_instances", "azure_id", subscriptionIds);
+      const azureId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
+      await upsertInstances(instanceList.azure, "azure_instances", "azure_id", subscriptionIds, azureId);
     }
 
     return `✅ Instances successfully added to group "${groupName}".`;
@@ -311,40 +288,49 @@ export const addInstancesToGroup = async (
 
 export const removeInstancesFromGroup = async (
   provider: "aws" | "azure" | "both",
-  userId: string,
+  userId: string | { aws: string; azure: string },
   instanceList: { aws?: string[]; azure?: string[] }
 ): Promise<string> => {
   try {
-      // ✅ Function to delete instances from the instance table
-      const deleteInstances = async (instances?: string[], instanceTable?: string) => {
-          if (!instances || instances.length === 0 || !instanceTable) return;
+    // ✅ Helper function to delete instances and validate ownership
+    const deleteInstances = async (
+      instances?: string[],
+      instanceTable?: string,
+      userKey?: string,
+      userValue?: string
+    ) => {
+      if (!instances || instances.length === 0 || !instanceTable || !userKey || !userValue) return;
 
-          const { error: deleteError } = await supabase
-              .from(instanceTable)
-              .delete()
-              .in("instance_id", instances);
+      const { error: deleteError } = await supabase
+        .from(instanceTable)
+        .delete()
+        .in("instance_id", instances)
+        .eq(userKey, userValue); // Make sure we only delete for the correct user
 
-          if (deleteError) {
-              throw new Error(`Error removing instances from group: ${deleteError.message}`);
-          }
-      };
-
-      // ✅ Handle AWS instances
-      if (provider === "aws" || provider === "both") {
-          await deleteInstances(instanceList.aws, "aws_instances");
+      if (deleteError) {
+        throw new Error(`Error removing instances from ${instanceTable}: ${deleteError.message}`);
       }
+    };
 
-      // ✅ Handle Azure instances
-      if (provider === "azure" || provider === "both") {
-          await deleteInstances(instanceList.azure, "azure_instances");
-      }
+    // ✅ AWS removal
+    if (provider === "aws" || provider === "both") {
+      const awsUserId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
+      await deleteInstances(instanceList.aws, "aws_instances", "aws_id", awsUserId);
+    }
 
-      return `✅ Instances successfully removed from group.`;
+    // ✅ Azure removal
+    if (provider === "azure" || provider === "both") {
+      const azureUserId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
+      await deleteInstances(instanceList.azure, "azure_instances", "azure_id", azureUserId);
+    }
+
+    return `✅ Instances successfully removed from group.`;
   } catch (error) {
-      console.error("❌ Error in removeInstancesFromGroup:", error);
-      throw new Error(error instanceof Error ? error.message : String(error));
+    console.error("❌ Error in removeInstancesFromGroup:", error);
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
 
 export const getUserGroups = async (
   awsId: string | null,

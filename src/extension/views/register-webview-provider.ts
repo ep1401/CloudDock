@@ -151,6 +151,20 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                                 type: "updateAllInstances",
                                                 instances: combinedInstances
                                             });
+
+                                            const awsId = provider === "aws" ? userId : otherUserId;
+                                            const azureId = provider === "azure" ? userId : otherUserId;
+
+                                            const multiGroups = await this.cloudManager.getMultiCloudGroupNames(awsId, azureId);
+                                            console.log("🌐 Multi-cloud groups found:", multiGroups);
+
+                                            // ✅ Send multi-group update to frontend
+                                            this.postMessage(webviewId, {
+                                                type: "updateMultiGroups",
+                                                multiGroups,
+                                                awsId,
+                                                azureId
+                                            });
                                         } catch (err) {
                                             console.error("❌ Failed to refresh and combine instances for updateAllInstances:", err);
                                         }
@@ -911,6 +925,19 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     userId: userIdAzureCreate
                                 });
                             }
+
+                            this.postMessage(webviewId, {
+                                type: "newGroupNameMulti",
+                                provider: "both",
+                                groupName: groupName,
+                                instances: {
+                                    aws: awsInstanceIds,
+                                    azure: azure.map(vm => ({ vmId: vm.vmId, subscriptionId: vm.subscriptionId }))
+                                },
+                                userIdAws: userIdAwsCreate,
+                                userIdAzure: userIdAzureCreate
+                            });
+                            
 
                         } catch (error) {
                             console.error("❌ Error creating multi-group:", error);
@@ -2575,6 +2602,31 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 groupSelectAzure.value = message.azureGroups[0];
                             }
                         }
+                        if (message.type === "updateMultiGroups") {
+                            console.log("🌐 Received Multi-Cloud Groups:", message.multiGroups);
+
+                            const groupSelectMulti = document.getElementById("groupNameMulti");
+                            groupSelectMulti.innerHTML = ""; // Clear previous options
+
+                            if (!message.multiGroups || message.multiGroups.length === 0) {
+                                console.warn("⚠️ No multi-cloud groups found.");
+                                const option = document.createElement("option");
+                                option.value = "";
+                                option.textContent = "No multi-cloud groups found";
+                                groupSelectMulti.appendChild(option);
+                            } else {
+                                message.multiGroups.forEach((group) => {
+                                    const option = document.createElement("option");
+                                    option.value = group;
+                                    option.textContent = group;
+                                    groupSelectMulti.appendChild(option);
+                                });
+
+                                // ✅ Select the first group by default
+                                groupSelectMulti.value = message.multiGroups[0];
+                            }
+                        }
+
                         if (message.type === "newGroupNameAzure") {
                             const groupName = message.groupName;
                             const groupSelectAzure = document.getElementById("groupNameAzure");
@@ -2605,6 +2657,38 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             // ✅ Optionally select the new group
                             groupSelectAzure.value = groupName;
                         }
+
+                        if (message.type === "newGroupNameMulti") {
+                            const groupName = message.groupName;
+                            const groupSelectMulti = document.getElementById("groupNameMulti");
+
+                            if (!groupSelectMulti || !groupName) {
+                                console.warn("⚠️ Cannot append new Multi group — missing group name or select element.");
+                                return;
+                            }
+
+                            // 🔄 Remove "Waiting..." option if it exists
+                            const firstOption = groupSelectMulti.options[0];
+                            if (firstOption && firstOption.value === "") {
+                                groupSelectMulti.removeChild(firstOption);
+                            }
+
+                            // 🚫 Prevent duplicates
+                            const exists = Array.from(groupSelectMulti.options).some(option => option.value === groupName);
+                            if (exists) {
+                                return;
+                            }
+
+                            // ➕ Append the new group
+                            const option = document.createElement("option");
+                            option.value = groupName;
+                            option.textContent = groupName;
+                            groupSelectMulti.appendChild(option);
+
+                            // ✅ Optionally select the new group
+                            groupSelectMulti.value = groupName;
+                        }
+
 
                         if (message.type === "groupDowntimeSet") {
                             const { provider, time, groupName, userId } = message;

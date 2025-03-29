@@ -575,7 +575,19 @@ export class CloudManager {
             console.error("❌ Error in removeGroupDowntime:", error);
             return false;
         }
-    }    
+    } 
+    async getMultiCloudGroupNames(
+        awsId: string,
+        azureId: string
+      ): Promise<string[]> {
+        try {
+          const groupNames = await database.getMultiUserGroups(awsId, azureId);
+          return groupNames;
+        } catch (error) {
+          console.error("❌ Error fetching multi-cloud group names:", error);
+          return [];
+        }
+    }   
 }
 
 

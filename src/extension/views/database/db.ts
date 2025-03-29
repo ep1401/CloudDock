@@ -431,6 +431,43 @@ export const getUserGroups = async (
   }
 };
 
+export const getMultiUserGroups = async (
+  awsId: string,
+  azureId: string
+): Promise<string[]> => {
+  try {
+    // ✅ Step 1: Look up multi-cloud sessions for this AWS & Azure combo
+    const { data: multiData, error: multiError } = await supabase
+      .from("multi_sessions")
+      .select("group_id")
+      .eq("aws_id", awsId)
+      .eq("azure_id", azureId);
+
+    if (multiError) {
+      throw new Error(`Error fetching multi-cloud group IDs: ${multiError.message}`);
+    }
+
+    const groupIds = multiData?.map(row => row.group_id) || [];
+
+    if (groupIds.length === 0) return [];
+
+    // ✅ Step 2: Get group names from instance_groups
+    const { data: groupNameData, error: groupNameError } = await supabase
+      .from("instance_groups")
+      .select("group_name")
+      .in("group_id", groupIds);
+
+    if (groupNameError) {
+      throw new Error(`Error fetching group names: ${groupNameError.message}`);
+    }
+
+    return groupNameData?.map(g => g.group_name) || [];
+  } catch (err) {
+    console.error("❌ Error in getMultiUserGroups:", err);
+    throw new Error(err instanceof Error ? err.message : String(err));
+  }
+};
+
 export const updateGroupDowntime = async (
   groupName: string,
   startTime: string,

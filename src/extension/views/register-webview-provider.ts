@@ -716,6 +716,23 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userId: userIdCreateGroup
                             }); 
 
+                            const userIdAwsCreate = userSession["aws"];
+                            const userIdAzureCreate = userSession["azure"];
+
+                            if (userIdAwsCreate && userIdAzureCreate) {
+                                this.postMessage(webviewId, {
+                                    type: "multiGroupCreated",
+                                    provider: "both",
+                                    groupname,
+                                    instances: {
+                                        aws: provider === "aws" ? instancesNewGroup : [],
+                                        azure: provider === "azure" ? instancesNewGroup : []
+                                    },
+                                    userIdAws: userIdAwsCreate,
+                                    userIdAzure: userIdAzureCreate
+                                });
+                            }
+
                         } catch (error) {
                             console.error(`❌ Error creating group for ${provider.toUpperCase()} user ${userIdCreateGroup}:`, error);
                             window.showErrorMessage(`Error creating group: ${error}`);
@@ -780,6 +797,21 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     instances: payload.instances,
                                     userId: azureUserId
                                 });
+
+                                const userIdAwsCreate = userSession["aws"];
+                                if (userIdAwsCreate) {
+                                    this.postMessage(webviewId, {
+                                        type: "multiGroupCreated",
+                                        provider: "both",
+                                        groupname,
+                                        instances: {
+                                            aws: [],
+                                            azure: instanceIdsCreate
+                                        },
+                                        userIdAws: userIdAwsCreate,
+                                        userIdAzure: azureUserId
+                                    });
+                                }
                         
                             } catch (error) {
                                 console.error(`❌ Error creating Azure group for user ${azureUserId}:`, error);
@@ -840,7 +872,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (!groupName) return;
 
-                            // ✅ Notify frontend
+                            // ✅ Multi-tab view
                             this.postMessage(webviewId, {
                                 type: "multiGroupCreated",
                                 provider: "both",
@@ -852,6 +884,33 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userIdAws: userIdAwsCreate,
                                 userIdAzure: userIdAzureCreate
                             });
+
+                            // ✅ AWS-specific tab sync
+                            if (awsInstanceIds.length > 0) {
+                                this.postMessage(webviewId, {
+                                    type: "groupCreated",
+                                    provider: "aws",
+                                    groupname: groupName,
+                                    instances: awsInstanceIds,
+                                    userId: userIdAwsCreate
+                                });
+                            }
+
+                            // ✅ Azure-specific tab sync
+                            if (azureInstanceIds.length > 0) {
+                                const azurePayloadInstances = azure.map(vm => ({
+                                    vmId: vm.vmId,
+                                    subscriptionId: vm.subscriptionId
+                                }));
+
+                                this.postMessage(webviewId, {
+                                    type: "groupCreatedAzure",
+                                    provider: "azure",
+                                    groupname: groupName,
+                                    instances: azurePayloadInstances,
+                                    userId: userIdAzureCreate
+                                });
+                            }
 
                         } catch (error) {
                             console.error("❌ Error creating multi-group:", error);
@@ -905,6 +964,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 instances: instancesToAdd,
                                 userId: userIdAddGroup
                             });
+
+                            const session = this.userSessions.get(webviewId);
+                            const userIdAzureAdd = session?.["azure"];
+                            if (userIdAzureAdd) {
+                                this.postMessage(webviewId, {
+                                    type: "multiGroupCreated",
+                                    provider: "both",
+                                    groupname,
+                                    instances: {
+                                        aws: instancesToAdd,
+                                        azure: []
+                                    },
+                                    userIdAws: userIdAddGroup,
+                                    userIdAzure: userIdAzureAdd
+                                });
+                            }
                         } catch (error) {
                             console.error(`❌ Error adding instances to group for user ${userIdAddGroup}:`, error);
                             window.showErrorMessage(`Error adding instances: ${error}`);
@@ -961,6 +1036,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     instances: payload.instances,
                                     userId: azureUserIdAddGroup
                                 });
+
+                                const session = this.userSessions.get(webviewId);
+                                const userIdAwsAdd = session?.["aws"];
+                                if (userIdAwsAdd) {
+                                    this.postMessage(webviewId, {
+                                        type: "multiGroupCreated",
+                                        provider: "both",
+                                        groupname,
+                                        instances: {
+                                            aws: [],
+                                            azure: instanceIdsToAdd
+                                        },
+                                        userIdAws: userIdAwsAdd,
+                                        userIdAzure: azureUserIdAddGroup
+                                    });
+                                }
                         
                             } catch (error) {
                                 console.error(`❌ Error adding Azure instances to group for user ${azureUserIdAddGroup}:`, error);
@@ -1034,7 +1125,28 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 },
                                 userIdAws: userIdAwsAdd,
                                 userIdAzure: userIdAzureAdd
-                            });                            
+                            }); 
+                            
+                            if (awsInstanceIds.length > 0) {
+                                this.postMessage(webviewId, {
+                                    type: "groupCreated",
+                                    provider: "aws",
+                                    groupname: groupName,
+                                    instances: awsInstanceIds,
+                                    userId: userIdAwsAdd
+                                });
+                            }
+                    
+                            // ✅ Also send Azure-specific update if any Azure instances were added
+                            if (azureInstanceIds.length > 0) {
+                                this.postMessage(webviewId, {
+                                    type: "groupCreatedAzure",
+                                    provider: "azure",
+                                    groupname: groupName,
+                                    instances: azureVMs, // use original payload so it includes subscriptionId
+                                    userId: userIdAzureAdd
+                                });
+                            }
 
                         } catch (error) {
                             console.error("❌ Error updating multi-cloud group:", error);
@@ -1084,6 +1196,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 instances: instancesToRemove,
                                 userId: userIdRemoveGroup
                             });
+
+                            const session = this.userSessions.get(webviewId);
+                            const userIdAzure = session?.["azure"];
+                            if (userIdAzure) {
+                                this.postMessage(webviewId, {
+                                    type: "multiGroupCreated",
+                                    provider: "both",
+                                    groupname,
+                                    instances: {
+                                        aws: instancesToRemove,
+                                        azure: []  // Nothing removed from Azure in this request
+                                    },
+                                    userIdAws: userIdRemoveGroup,
+                                    userIdAzure
+                                });
+                            }
                         } catch (error) {
                             console.error(`❌ Error removing instances from group for user ${userIdRemoveGroup}:`, error);
                             window.showErrorMessage(`Error removing instances: ${error}`);
@@ -1133,6 +1261,22 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 instances: payload.instances, // preserve structure for frontend
                                 userId: azureUserIdRemoveGroup
                             });
+
+                            const session = this.userSessions.get(webviewId);
+                            const userIdAws = session?.["aws"];
+                            if (userIdAws) {
+                                this.postMessage(webviewId, {
+                                    type: "multiGroupCreated",
+                                    provider: "both",
+                                    groupname,
+                                    instances: {
+                                        aws: [],
+                                        azure: instanceIdsToRemove
+                                    },
+                                    userIdAws,
+                                    userIdAzure: azureUserIdRemoveGroup
+                                });
+                            }
 
                         } catch (error) {
                             console.error(`❌ Error removing Azure instances from group for user ${azureUserIdRemoveGroup}:`, error);
@@ -1210,6 +1354,27 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userIdAws: userIdAwsRemove,
                                 userIdAzure: userIdAzureRemove
                             });
+
+                            if (awsInstancesToRemove.length > 0) {
+                                this.postMessage(webviewId, {
+                                    type: "groupCreated",
+                                    provider: "aws",
+                                    groupname: groupName,
+                                    instances: awsInstancesToRemove,
+                                    userId: userIdAwsRemove
+                                });
+                            }
+                    
+                            // ✅ Azure tab sync (if applicable)
+                            if (azureVmIds.length > 0) {
+                                this.postMessage(webviewId, {
+                                    type: "groupCreatedAzure",
+                                    provider: "azure",
+                                    groupname: groupName,
+                                    instances: azureInstancesToRemove, // includes subscriptionId
+                                    userId: userIdAzureRemove
+                                });
+                            }
 
                         } catch (error) {
                             console.error("❌ Error removing instances from multi-cloud group:", error);

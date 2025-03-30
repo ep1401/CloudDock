@@ -1,77 +1,48 @@
-# CloudDock: Lightweight Multicloud Test Environment Manager for VS Code
+# CloudDock: Multicloud Test Environment Manager for Visual Studio Code
 
-**CloudDock** empowers developers to manage test environments across **AWS** and **Azure**—all from within **Visual Studio Code**. Whether you're spinning up a quick VM, scheduling instance shutdowns, or monitoring cloud costs, CloudDock brings cloud simplicity to your IDE.
+**CloudDock** is a lightweight extension that enables developers to manage test environments across **AWS** and **Azure**, directly within Visual Studio Code. Provision virtual machines, automate shutdowns, and monitor cloud usage—all without switching between cloud consoles.
 
-> Provision faster. Shutdown smarter. Spend less. All without leaving VS Code.
+## Overview
 
----
+CloudDock is designed for developers who need fast, reliable control over multicloud resources during the software development lifecycle. By bringing essential cloud actions into the IDE, CloudDock reduces context switching, helps prevent resource waste, and provides greater visibility into cloud costs during testing.
 
-[!TIP] Spending too much time bouncing between AWS and Azure portals just to test your code?
+The extension supports unified management of EC2 instances and Azure VMs, allowing you to group, provision, schedule, and monitor cloud resources from a single interface.
 
-CloudDock gives you one unified interface to manage both clouds, so you can stay focused on building — not babysitting infrastructure.
+## Key Benefits
 
-☁️ View the full source on GitHub: [ep1401/DevTestManager](https://github.com/ep1401/DevTestManager)
+- Simplifies multicloud environment management
+- Prevents unnecessary cloud spending through automated shutdowns
+- Enables provisioning of AWS and Azure instances without leaving VS Code
+- Provides visibility into live cloud usage and cost metrics
+- Streamlines developer workflows by reducing reliance on cloud provider portals
 
----
+## Installation and Setup
 
-## 🚀 Features
+1. Install the **CloudDock** extension from the Visual Studio Code Marketplace.
+2. Authenticate with your **AWS** and **Azure** accounts.
+3. For AWS users, configure the required IAM role:  
+   [Deploy via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml)
+4. Open the **CloudDock** panel from the sidebar.
+5. Provision instances, schedule shutdowns, and manage environments as needed.
 
-### 🔁 **Multicloud Grouping**
-Create multicloud environment groups and manage test setups across **AWS and Azure** together — no duplication needed.
+## Example Use Case
 
-### ⚡ **One-Click Provisioning**
-Quickly launch EC2 instances or Azure VMs using built-in templates, right from VS Code.
+- Provision an Azure VM and an AWS EC2 instance as part of a test group.
+- Schedule an automatic shutdown in two hours to avoid overages.
+- Monitor and control both environments from within Visual Studio Code.
 
-### 🕒 **Scheduled Shutdowns**
-Avoid forgotten cloud resources by scheduling shutdowns directly during provisioning.
+## Target Users
 
-### 🧩 **Instance Actions**
-Start, stop, or terminate instances from within the **CloudDock tab** — no console hopping required.
+CloudDock is built specifically for:
 
-### 💰 **Live Cost Monitoring**
-View real-time cost data from both **AWS and Azure**, side-by-side, inside your IDE.
+- Developers who test applications across multiple cloud platforms
+- Teams that require temporary, disposable environments for CI/CD or QA
+- Users looking to streamline cloud actions without complex dashboards or governance tools
 
----
+## License
 
-## 🛠️ Usage
-
-1. Install the **CloudDock** extension from the VS Code Marketplace.
-2. Authenticate with your AWS and Azure accounts.
-3. **[AWS Only]** Set up the required IAM role:
-   👉 [Click here to deploy the IAM Role via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml)
-4. Open the **CloudDock panel** from the sidebar.
-5. Provision new instances or create multicloud groups.
-6. Schedule shutdown times to avoid unnecessary costs.
-7. Monitor live usage and perform instance actions from VS Code.
-
----
-
-## 🧪 Example Workflow
-
-- Launch an **Azure VM** and an **AWS EC2 instance** in one multicloud group.
-- Schedule both to shut down in 2 hours to prevent billing overages.
-- Use CloudDock to track cloud spend and control both environments from one place.
+This extension is open-source and licensed under the [MIT License](LICENSE).
 
 ---
 
-## 🧠 Built For Developers
-
-Unlike heavy enterprise cloud management platforms, CloudDock is:
-
-- 🪶 **Lightweight** – No complicated dashboards or governance policies
-- ⚙️ **Fast** – Designed for on-demand provisioning and real-time control
-- 🧑‍💻 **Developer-centric** – All within your code editor
-
----
-
-## 💡 Ideal For
-
-- Developers testing cloud-based features across providers  
-- Teams that need **temporary** multicloud environments  
-- Anyone tired of jumping between cloud consoles just to spin up or shut down resources
-
----
-
-## 📄 License
-
-MIT License
+View the full source code on GitHub: [ep1401/CloudDock](https://github.com/ep1401/CloudDock)

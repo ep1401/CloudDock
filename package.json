@@ -1,7 +1,7 @@
 {
-  "name": "devtest-manager",
+  "name": "clouddock",
   "publisher": "EthanPuckett",
-  "displayName": "DevTest Manager",
+  "displayName": "CloudDock",
   "description": "Vs code extension poc",
   "version": "0.0.1",
   "icon": "media/icons/logo.png",

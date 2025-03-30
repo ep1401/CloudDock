@@ -10,9 +10,51 @@ export class AWSManager {
     * @param userAccountId AWS Account ID (which we use as the user identifier)
     * @returns The user's AWS session or undefined if not authenticated.
     */
-   getUserSession(userAccountId: string) {
-       return this.userSessions.get(userAccountId);
-   }
+   async getUserSession(userAccountId: string): Promise<{ awsConfig?: AWS.Config; selectedRegion: string } | undefined> {
+        // ✅ Step 1: Check in-memory cache
+        const session = this.userSessions.get(userAccountId);
+        if (session?.awsConfig) {
+            return session;
+        }
+
+        // ✅ Step 2: Load from DB
+        const row = await database.getAWSCredentials(userAccountId);
+        if (!row) {
+            console.warn(`⚠️ No stored credentials found for AWS user ${userAccountId}`);
+            return undefined;
+        }
+
+        const now = Date.now();
+        const expiration = new Date(row.expiration).getTime();
+
+        // ✅ Step 3: If expired, try to re-authenticate
+        if (expiration < now) {
+            console.log(`🔁 AWS credentials expired for ${userAccountId}, re-authenticating...`);
+            try {
+                await this.authenticate(row.role_arn); // Should refresh session and updateUserSession
+            } catch (authError) {
+                console.error(`❌ Failed to re-authenticate user ${userAccountId}:`, authError);
+                return undefined;
+            }
+        } else {
+            // ✅ Step 4: If still valid, create and cache awsConfig
+            const awsConfig = new AWS.Config({
+                accessKeyId: row.access_key_id,
+                secretAccessKey: row.secret_access_key,
+                sessionToken: row.session_token,
+                region: row.region
+            });
+
+            this.updateUserSession(userAccountId, {
+                awsConfig,
+                selectedRegion: row.region
+            });
+        }
+
+        // ✅ Step 5: Return from memory again (freshly set)
+        return this.userSessions.get(userAccountId);
+    }
+
 
    /**
     * ✅ Updates or sets the AWS session for a user.
@@ -70,6 +112,16 @@ export class AWSManager {
            // ✅ Use the new helper function to store the session
            this.updateUserSession(userAccountId, { awsConfig, selectedRegion: "us-east-2" });
 
+           await database.storeAWSCredentials({
+            aws_id: userAccountId,
+            access_key_id: assumedRole.Credentials.AccessKeyId!,
+            secret_access_key: assumedRole.Credentials.SecretAccessKey!,
+            session_token: assumedRole.Credentials.SessionToken!,
+            expiration: new Date(assumedRole.Credentials.Expiration!),
+            role_arn: roleArn,
+            region: "us-east-2"
+          });
+
            return userAccountId;
 
        } catch (error) {
@@ -105,7 +157,7 @@ export class AWSManager {
             return;
         }
 
-        const userSession = this.getUserSession(userId);
+        const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userId}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
@@ -214,7 +266,7 @@ export class AWSManager {
 
 
    private async getLatestAMI(userId: string, template: string): Promise<string | null> {
-        const userSession = this.getUserSession(userId);
+        const userSession = await this.getUserSession(userId);
 
         if (!userSession) {
             console.error(`❌ No session found for user ${userId}. Please authenticate first.`);
@@ -291,7 +343,7 @@ export class AWSManager {
     }
     
     private async findPublicSubnet(userId: string): Promise<string | null> {
-        const userSession = this.getUserSession(userId);
+        const userSession = await this.getUserSession(userId);
     
         if (!userSession) {
             console.error(`❌ No session found for user ${userId}. Please authenticate first.`);
@@ -336,7 +388,7 @@ export class AWSManager {
     }    
 
     private async getOrCreateSecurityGroup(userId: string): Promise<string> {
-        const userSession = this.getUserSession(userId);
+        const userSession = await this.getUserSession(userId);
     
         if (!userSession) {
             console.error(`❌ No session found for user ${userId}. Please authenticate first.`);
@@ -426,7 +478,7 @@ export class AWSManager {
     }    
 
     private async getInstancePublicIp(userId: string, instanceId: string): Promise<string | null> {
-        const userSession = this.getUserSession(userId);
+        const userSession = await this.getUserSession(userId);
     
         if (!userSession) {
             console.error(`❌ No session found for user ${userId}. Please authenticate first.`);
@@ -481,7 +533,7 @@ export class AWSManager {
     */
    async fetchKeyPairs(userAccountId: string): Promise<string[]> {
         // ✅ Ensure session exists for the user
-        const userSession = this.getUserSession(userAccountId);
+        const userSession = await this.getUserSession(userAccountId);
         if (!userSession || !userSession.awsConfig) {
             console.error(`❌ No valid AWS session found for account ${userAccountId}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
@@ -527,7 +579,7 @@ export class AWSManager {
     * @param userId Unique user identifier.
     */
    async fetchAllEC2InstancesAcrossRegions(userId: string) {
-        const userSession = this.userSessions.get(userId);
+        const userSession = await this.getUserSession(userId);
 
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userId}. Please authenticate first.`);
@@ -653,7 +705,7 @@ export class AWSManager {
        console.log(`🔹 Changing AWS region for account ${userAccountId} to: ${region}`);
 
        // ✅ Retrieve the user session
-       const userSession = this.getUserSession(userAccountId);
+       const userSession = await this.getUserSession(userAccountId);
        if (!userSession) {
            console.error(`❌ No active AWS session found for account ${userAccountId}.`);
            window.showErrorMessage("Please authenticate before changing regions.");
@@ -693,7 +745,7 @@ export class AWSManager {
             throw new Error("At least one instance ID is required to shut down instances.");
         }
     
-        const userSession = this.getUserSession(userIdAWS);
+        const userSession = await this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
@@ -747,7 +799,7 @@ export class AWSManager {
         }
     
         // ✅ Retrieve the user session
-        const userSession = this.getUserSession(userIdAWS);
+        const userSession = await this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
@@ -789,7 +841,7 @@ export class AWSManager {
             throw new Error("At least one instance ID is required to start instances.");
         }
     
-        const userSession = this.getUserSession(userIdAWS);
+        const userSession = await this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
             window.showErrorMessage("Please authenticate first!");
@@ -830,7 +882,7 @@ export class AWSManager {
         }
     }    
     async getTotalMonthlyCost(userAccountId: string) {
-        const session = this.getUserSession(userAccountId);
+        const session = await this.getUserSession(userAccountId);
         if (!session || !session.awsConfig) {
             throw new Error("User session not found. Authenticate first.");
         }

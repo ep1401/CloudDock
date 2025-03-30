@@ -13,30 +13,38 @@ const INSTANCE_VIEW_CONCURRENCY = 10;
 
 export class RefreshableVSCodeSessionCredential implements TokenCredential {
     private currentToken: AccessToken | null = null;
-
-    constructor(private accountId: string) {}
-
+  
+    constructor(private accountId: string, tokenData?: { token: string; expiresOnTimestamp: number }) {
+      if (tokenData) {
+        this.currentToken = {
+          token: tokenData.token,
+          expiresOnTimestamp: tokenData.expiresOnTimestamp
+        };
+      }
+    }
+  
     async getToken(): Promise<AccessToken> {
-        if (!this.currentToken || this.currentToken.expiresOnTimestamp < Date.now()) {
-            const session = await vscode.authentication.getSession(
-                "microsoft",
-                ["https://management.azure.com/user_impersonation"],
-                { createIfNone: true }
-            );
-
-            if (!session) {
-                throw new Error("User must be logged in to Azure.");
-            }
-
-            this.currentToken = {
-                token: session.accessToken,
-                expiresOnTimestamp: Date.now() + 60 * 60 * 1000
-            };
+      if (!this.currentToken || this.currentToken.expiresOnTimestamp < Date.now()) {
+        const session = await vscode.authentication.getSession(
+          "microsoft",
+          ["https://management.azure.com/user_impersonation"],
+          { createIfNone: true }
+        );
+  
+        if (!session) {
+          throw new Error("User must be logged in to Azure.");
         }
-
-        return this.currentToken;
+  
+        this.currentToken = {
+          token: session.accessToken,
+          expiresOnTimestamp: Date.now() + 60 * 60 * 1000
+        };
+      }
+  
+      return this.currentToken;
     }
 }
+  
 
 export class AzureManager {
     // ✅ Store both subscriptions and resource groups
@@ -45,19 +53,53 @@ export class AzureManager {
         subscriptions: { subscriptionId: string; displayName: string }[]; 
     }> = new Map();
 
-    getUserSession(userAccountId: string) {
-        return this.userSessions.get(userAccountId);
+    async getUserSession(userId: string): Promise<{
+        azureCredential: TokenCredential;
+        subscriptions: { subscriptionId: string; displayName: string }[];
+      } | undefined> {
+        const cached = this.userSessions.get(userId);
+        if (cached) return cached;
+      
+        const creds = await database.getAzureCredentials(userId);
+        if (!creds) return undefined;
+      
+        const expires = new Date(creds.expires_on).getTime();
+        const now = Date.now();
+      
+        // Build credential directly from DB token — no login prompt
+        const azureCredential = new RefreshableVSCodeSessionCredential(userId, {
+          token: creds.access_token,
+          expiresOnTimestamp: expires
+        });
+      
+        const subscriptionClient = new SubscriptionClient(azureCredential);
+        const subscriptions: { subscriptionId: string; displayName: string }[] = [];
+      
+        for await (const sub of subscriptionClient.subscriptions.list()) {
+          if (sub.subscriptionId && sub.displayName) {
+            subscriptions.push({
+              subscriptionId: sub.subscriptionId,
+              displayName: sub.displayName
+            });
+          }
+        }
+      
+        const session = { azureCredential, subscriptions };
+        this.updateUserSession(userId, session);
+        return session;
     }
+      
 
     updateUserSession(
         userAccountId: string, 
         session: { 
-            azureCredential: DefaultAzureCredential; 
+            azureCredential: TokenCredential; 
             subscriptions: { subscriptionId: string; displayName: string }[]; 
         }
     ) {
         this.userSessions.set(userAccountId, session);
-    }
+    }    
+    
 
     /**
      * ✅ Helper Function: Fetches resource groups for a subscription
@@ -89,7 +131,7 @@ export class AzureManager {
             console.log(`📤 Fetching resource groups for Subscription ID: ${subscriptionId} and User ID: ${userId}`);
     
             // ✅ Ensure the user session exists
-            const userSession = this.userSessions.get(userId);
+            const userSession = await this.getUserSession(userId);
             if (!userSession || !userSession.azureCredential) {
                 throw new Error("❌ Azure credentials not found. User may need to reauthenticate.");
             }
@@ -129,6 +171,19 @@ export class AzureManager {
             }
     
             console.log("✅ Azure authentication successful:", session);
+
+            const azureId = session.account.id;
+            const accountLabel = session.account.label;
+            const accessToken = session.accessToken;
+            const expiresOn = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+            // ✅ Persist credentials to Supabase
+            await database.storeAzureCredentials({
+                azure_id: azureId,
+                access_token: accessToken,
+                expires_on: expiresOn,
+                account_label: accountLabel
+            });
     
             // Step 2: Use fast credential from VS Code
             const azureCredential = new RefreshableVSCodeSessionCredential(session.account.id);
@@ -203,7 +258,7 @@ export class AzureManager {
         vmName: string;
     }): Promise<string> {
         // Retrieve the authenticated session for the provided userId.
-        const userSession = this.userSessions.get(params.userId);
+        const userSession = await this.getUserSession(params.userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
@@ -350,7 +405,7 @@ export class AzureManager {
 
 
     async getUserVMs(userId: string) {
-        const userSession = this.userSessions.get(userId);
+        const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
@@ -459,7 +514,7 @@ export class AzureManager {
      * @param instanceId The ID of the VM to be stopped.
      */
     async stopVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
-        const userSession = this.userSessions.get(userId);
+        const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
@@ -499,7 +554,7 @@ export class AzureManager {
     }    
 
     async startVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
-        const userSession = this.userSessions.get(userId);
+        const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
@@ -540,7 +595,7 @@ export class AzureManager {
     
 
     async deleteVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
-        const userSession = this.userSessions.get(userId);
+        const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
@@ -584,7 +639,7 @@ export class AzureManager {
 
     async getMonthlyCost(userId: string): Promise<string> {
         try {
-            const userSession = this.userSessions.get(userId);
+            const userSession = await this.getUserSession(userId);
             if (!userSession || !userSession.azureCredential || userSession.subscriptions.length === 0) {
                 throw new Error("❌ No valid Azure session or subscriptions found for user.");
             }

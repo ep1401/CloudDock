@@ -700,4 +700,142 @@ export const getInstancesByGroup = async (groupName: string) => {
   }
 };
 
+// Import the Pool class from the 'pg' library
+import { Pool } from "pg";
+
+// Initialize the pool with your database connection settings
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: parseInt(process.env.DB_PORT || "5432", 10),
+});
+
+export const storeAWSCredentials = async (creds: {
+  aws_id: string;
+  access_key_id: string;
+  secret_access_key: string;
+  session_token: string;
+  expiration: Date;
+  role_arn: string;
+  region: string;
+}): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from("aws_temp_credentials")
+      .upsert(
+        [
+          {
+            aws_id: creds.aws_id,
+            access_key_id: creds.access_key_id,
+            secret_access_key: creds.secret_access_key,
+            session_token: creds.session_token,
+            expiration: creds.expiration.toISOString(), // Supabase expects ISO string
+            role_arn: creds.role_arn,
+            region: creds.region,
+            last_updated: new Date().toISOString()
+          }
+        ],
+        {
+          onConflict: "aws_id"
+        }
+      );
+
+    if (error) {
+      throw new Error(`Error storing AWS credentials: ${error.message}`);
+    }
+
+    console.log(`✅ AWS credentials stored for user ${creds.aws_id}`);
+  } catch (err) {
+    console.error("❌ storeAWSCredentials failed:", err);
+    throw err;
+  }
+};
+
+export const getAWSCredentials = async (userAccountId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("aws_temp_credentials")
+      .select(
+        "aws_id, access_key_id, secret_access_key, session_token, expiration, role_arn, region"
+      )
+      .eq("aws_id", userAccountId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+
+    if (!data) {
+      console.warn(`⚠️ No AWS credentials found for user ${userAccountId}`);
+      return null;
+    }
+
+    return data; // Matches shape your app expects
+  } catch (err) {
+    console.error(`❌ Error fetching AWS credentials for user ${userAccountId}:`, err);
+    return null;
+  }
+};
+
+export const storeAzureCredentials = async (creds: {
+  azure_id: string;
+  access_token: string;
+  expires_on: Date;
+  account_label?: string;
+}): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from("azure_temp_credentials")
+      .upsert(
+        [
+          {
+            azure_id: creds.azure_id,
+            access_token: creds.access_token,
+            expires_on: creds.expires_on.toISOString(), // convert Date to ISO string
+            account_label: creds.account_label ?? null,
+            last_updated: new Date().toISOString()
+          }
+        ],
+        { onConflict: "azure_id" }
+      );
+
+    if (error) {
+      throw new Error(`Error storing Azure credentials: ${error.message}`);
+    }
+
+    console.log(`✅ Stored Azure credentials for user ${creds.azure_id}`);
+  } catch (err) {
+    console.error("❌ storeAzureCredentials failed:", err);
+    throw err;
+  }
+};
+
+export const getAzureCredentials = async (azureId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("azure_temp_credentials")
+      .select("azure_id, access_token, expires_on, account_label")
+      .eq("azure_id", azureId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+
+    if (!data) {
+      console.warn(`⚠️ No Azure credentials found for user ${azureId}`);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error(`❌ Error fetching Azure credentials for user ${azureId}:`, err);
+    return null;
+  }
+};
+
+
+
 

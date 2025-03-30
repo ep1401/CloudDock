@@ -1,66 +1,132 @@
-# Infinite POC for Visual Studio Code
+# DevTest Manager (VS Code Extension)
 
-This extension will demonstrate most of the vs code extension capabilities.
+This VS Code extension helps manage **multicloud infrastructure (AWS & Azure)** from a convenient sidebar panel. Built with **TypeScript**, **Webpack**, and custom **WebViews**.
 
-## Topics
+---
 
-- Simple VSCODE Extension POC App
-- Create Commands
-- ActivationEvents entry
-- Show message
-    - `Info message`
-    - `Error message`
-    - `Dialog modal message`
-    - `Input Box`
-- Configuration or Properties of extension
-    - `Boolean/Integer`
-    - `String`
-    - `Array`
-    - `Enum for dropdown selection`
-- Snippets
-    - `Example for adding method snippets`
-- Code Completion
-    - `Load defination`
-    - `Show available methods or interfaces`
-    - `Show child elements on pressing of '.'`
-- Create Sidebar webview panel
-    - Add HTML elements like `button` / `Input box`
-    - Transfer data b/w webview & extension
-- Create Center panel
-    - Add HTML elements like `button` / `Input box`
-    - Transfer data b/w webview & extension
-- Webview developer Tool
-    - `Disable in Prod env`
-    - `Open/Show in dev env`
-- Create context menu
-    - `explorer`
-    - `editor`
-- Select all/specific text from editor
-- Create output channel
-- Set Context variable & use it in `package.json`
-    - `Hide commands from commandPalette`
-- Progress Bar
-- Extension cache
-    - `Set`
-    - `Get keys`
-    - `Get value`
-    - `Clear value`
-- Extension secret storage
-    - `Set`
-    - `Get value`
-- Open folder
-    - `Create Untitled/temp document`
-    - `Open existing document`
-    - `Show diff b/w 2 documents/files`
-- Event Emitter for transfering/updating data or notification
-    - `Publish`
-    - `Subscribe`
-- Open URL in browser
-- Call/Open extension from browser via `Uri Handler`
-- Create local package
-    - `Add publisher name in package.json`
-    - `Add repository url in package.json`
-- Publish
-    - https://code.visualstudio.com/api/get-started/your-first-extension
-    - https://code.visualstudio.com/api/working-with-extensions/publishing-extension
-    - https://marketplace.visualstudio.com/manage 
+## 🐳 Containerized Setup (Recommended)
+
+### 1. Build the Docker container
+
+```bash
+docker build -t devtest-manager .
+```
+
+### 2. Create your `.env` file
+
+```bash
+cp .env.example .env
+```
+
+> **Note**  
+> Edit the `.env` file and insert your actual Supabase credentials.
+
+### 3. Start the development watcher
+
+```bash
+docker run --rm -it \
+  -v ${PWD}:/app \
+  -w /app \
+  --env-file .env \
+  devtest-manager \
+  npm run watch
+```
+
+### 4. Launch the extension in VS Code
+
+- Open the project folder in VS Code  
+- Press `Ctrl + Fn + F5`  
+  *or*  
+- Open the **Run and Debug** tab → **Launch Extension**
+
+---
+
+## 🛠 Manual Setup (Without Docker)
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Create your `.env` file
+
+```bash
+cp .env.example .env
+```
+
+> **Reminder**  
+> Update `.env` with your Supabase credentials.
+
+### 3. Start the Webpack watcher
+
+```bash
+npm run watch
+```
+
+### 4. Launch the extension
+
+- Press `Ctrl + Fn + F5`  
+  *or*  
+- Use the **Run and Debug** tab → **Launch Extension**
+
+---
+
+## 📁 Project Structure
+
+```
+├── src/             # TypeScript source files
+├── dist/            # Compiled Webpack output
+├── media/           # Icons and static assets
+├── .env.example     # Sample environment config
+└── package.json     # Entry point: main -> dist/extension.js
+```
+
+---
+
+## ⚙️ Features
+
+- WebView sidebar UI for managing AWS & Azure VMs
+- Multicloud group control and scheduled downtime
+- Background task scheduler
+- Session-specific WebViews and secret storage
+- `.env`-based setup for environment separation
+- Custom context menus and commands
+- Output channel integration for logs
+
+---
+
+## 🔐 Environment Variables
+
+To connect to Supabase, your `.env` file should include:
+
+```env
+SUPABASE_URL=your-url-here
+SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SECRET_KEY=your-secret-key-here
+```
+
+A sample `.env.example` file is included in the repo.
+
+---
+
+## 📦 Tech Stack
+
+- `TypeScript`
+- `Webpack`
+- `VS Code API`
+- `Supabase`
+- `Docker`
+
+---
+
+## 🧪 Local Testing
+
+Run all watchers and start the debugger to test live changes to your extension inside a VS Code Development Host.
+
+---
+
+## 📝 License
+
+MIT License © 2025
+

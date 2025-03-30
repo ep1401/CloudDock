@@ -603,7 +603,29 @@ export class CloudManager {
             return "0.00"; // Default to 0 if error occurs
         }
     }
+
+    async viewGroupDowntime(groupName: string): Promise<void> {
+        try {
+            const time = await database.getGroupDowntime(groupName); // { startTime: string, endTime: string }
     
+            if (!time || !time.startTime || !time.endTime) {
+                window.showWarningMessage(`⚠️ No scheduled downtime found for group '${groupName}'.`);
+                return;
+            }
+    
+            // Format time strings to readable format
+            const formattedStart = new Date(time.startTime).toLocaleString();
+            const formattedEnd = new Date(time.endTime).toLocaleString();
+    
+            const message = `📅 Downtime for "${groupName}":\nStart - ${formattedStart}\nEnd - ${formattedEnd}`;
+            window.showInformationMessage(message);
+    
+        } catch (error) {
+            console.error(`❌ Error viewing downtime for group '${groupName}':`, error);
+            window.showErrorMessage(`Error retrieving downtime: ${error}`);
+        }
+    }
+        
 }
 
 

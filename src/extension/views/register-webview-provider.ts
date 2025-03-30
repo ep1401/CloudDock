@@ -1752,6 +1752,33 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
 
                         break;
+                    case "viewGroupDowntime":
+                        console.log(`🔹 Received viewGroupDowntime request from webview ${webviewId}:`, data);
+
+                        if (!webviewId) {
+                            console.error("❌ Missing webviewId in viewGroupDowntime request.");
+                            window.showErrorMessage("Webview ID is missing. Please refresh and try again.");
+                            return;
+                        }
+
+                        if (!payload || !payload.groupName) {
+                            console.warn("❌ Invalid view downtime request: Missing group name.");
+                            window.showErrorMessage("Missing group name for viewing downtime.");
+                            return;
+                        }
+
+                        try {
+                            const { groupName } = payload;
+
+                            // ✅ Call the CloudManager method to show downtime info
+                            await this.cloudManager.viewGroupDowntime(groupName);
+
+                        } catch (error) {
+                            console.error("❌ Error displaying downtime:", error);
+                            window.showErrorMessage(`Failed to view downtime for group: ${error}`);
+                        }
+
+                        break;
 
                 }
             } catch (error) {
@@ -3515,6 +3542,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             case "deldownaws":
                                 messageType = "deleteGroupDowntime";
                                 break;
+                            case "viewdownaws":
+                                messageType = "viewGroupDowntime";
+                                break;
                             default:
                                 alert("Invalid action selected.");
                                 return;
@@ -3548,6 +3578,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 break;
                             case "deldownazure":
                                 messageType = "deleteGroupDowntime";
+                                break;
+                            case "viewdownazure":
+                                messageType = "viewGroupDowntime";
                                 break;
                             default:
                                 alert("Invalid action selected.");
@@ -3583,6 +3616,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 break;
                             case "deldown":
                                 messageType = "deleteGroupDowntimeMulti";
+                                break;
+                            case "viewdown":
+                                messageType = "viewGroupDowntime";
                                 break;
                             default:
                                 alert("Invalid multi-cloud action selected.");

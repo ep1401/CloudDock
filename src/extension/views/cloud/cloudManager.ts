@@ -69,6 +69,8 @@ export class CloudManager {
                 const cost = await this.awsManager.getTotalMonthlyCost(userAccountId);
 
                 console.log('cost value: ' + cost);
+
+                window.showInformationMessage(`✅ Successfully connected to AWS for account ${userAccountId}`);
             
                 // ✅ Return the userAccountId and keyPairs
                 return { userAccountId, keyPairs, ec2instances, usergroups, cost };

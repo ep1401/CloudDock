@@ -70,8 +70,6 @@ export class AWSManager {
            // ✅ Use the new helper function to store the session
            this.updateUserSession(userAccountId, { awsConfig, selectedRegion: "us-east-2" });
 
-           window.showInformationMessage(`✅ Successfully connected to AWS for account ${userAccountId}`);
-
            return userAccountId;
 
        } catch (error) {
@@ -871,10 +869,7 @@ export class AWSManager {
             }
     
             console.log(`✅ Total AWS Monthly Cost: $${totalCost.toFixed(2)}`);
-            
-            // Show message in VS Code UI
-            window.showInformationMessage(`AWS Monthly Cost: $${totalCost.toFixed(2)}`);
-    
+                
             return totalCost.toFixed(2);
     
         } catch (error) {

@@ -1,132 +1,75 @@
-# DevTest Manager (VS Code Extension)
+# CloudDock: Lightweight Multicloud Test Environment Manager for VS Code
 
-This VS Code extension helps manage **multicloud infrastructure (AWS & Azure)** from a convenient sidebar panel. Built with **TypeScript**, **Webpack**, and custom **WebViews**.
+**CloudDock** empowers developers to manage test environments across **AWS** and **Azure**—all from within **Visual Studio Code**. Whether you're spinning up a quick VM, scheduling instance shutdowns, or monitoring cloud costs, CloudDock brings cloud simplicity to your IDE.
 
----
-
-## 🐳 Containerized Setup (Recommended)
-
-### 1. Build the Docker container
-
-```bash
-docker build -t devtest-manager .
-```
-
-### 2. Create your `.env` file
-
-```bash
-cp .env.example .env
-```
-
-> **Note**  
-> Edit the `.env` file and insert your actual Supabase credentials.
-
-### 3. Start the development watcher
-
-```bash
-docker run --rm -it \
-  -v ${PWD}:/app \
-  -w /app \
-  --env-file .env \
-  devtest-manager \
-  npm run watch
-```
-
-### 4. Launch the extension in VS Code
-
-- Open the project folder in VS Code  
-- Press `Ctrl + Fn + F5`  
-  *or*  
-- Open the **Run and Debug** tab → **Launch Extension**
+> Provision faster. Shutdown smarter. Spend less. All without leaving VS Code.
 
 ---
 
-## 🛠 Manual Setup (Without Docker)
+[!TIP] Spending too much time bouncing between AWS and Azure portals just to test your code?
 
-### 1. Install dependencies
+CloudDock gives you one unified interface to manage both clouds, so you can stay focused on building — not babysitting infrastructure.
 
-```bash
-npm install
-```
-
-### 2. Create your `.env` file
-
-```bash
-cp .env.example .env
-```
-
-> **Reminder**  
-> Update `.env` with your Supabase credentials.
-
-### 3. Start the Webpack watcher
-
-```bash
-npm run watch
-```
-
-### 4. Launch the extension
-
-- Press `Ctrl + Fn + F5`  
-  *or*  
-- Use the **Run and Debug** tab → **Launch Extension**
+☁️ View the full source on GitHub: [ep1401/DevTestManager](https://github.com/ep1401/DevTestManager)
 
 ---
 
-## 📁 Project Structure
+## 🚀 Features
 
-```
-├── src/             # TypeScript source files
-├── dist/            # Compiled Webpack output
-├── media/           # Icons and static assets
-├── .env.example     # Sample environment config
-└── package.json     # Entry point: main -> dist/extension.js
-```
+### 🔁 **Multicloud Grouping**
+Create multicloud environment groups and manage test setups across **AWS and Azure** together — no duplication needed.
 
----
+### ⚡ **One-Click Provisioning**
+Quickly launch EC2 instances or Azure VMs using built-in templates, right from VS Code.
 
-## ⚙️ Features
+### 🕒 **Scheduled Shutdowns**
+Avoid forgotten cloud resources by scheduling shutdowns directly during provisioning.
 
-- WebView sidebar UI for managing AWS & Azure VMs
-- Multicloud group control and scheduled downtime
-- Background task scheduler
-- Session-specific WebViews and secret storage
-- `.env`-based setup for environment separation
-- Custom context menus and commands
-- Output channel integration for logs
+### 🧩 **Instance Actions**
+Start, stop, or terminate instances from within the **CloudDock tab** — no console hopping required.
+
+### 💰 **Live Cost Monitoring**
+View real-time cost data from both **AWS and Azure**, side-by-side, inside your IDE.
 
 ---
 
-## 🔐 Environment Variables
+## 🛠️ Usage
 
-To connect to Supabase, your `.env` file should include:
-
-```env
-SUPABASE_URL=your-url-here
-SUPABASE_ANON_KEY=your-anon-key-here
-SUPABASE_SECRET_KEY=your-secret-key-here
-```
-
-A sample `.env.example` file is included in the repo.
+1. Install the **CloudDock** extension from the VS Code Marketplace.
+2. Authenticate with your AWS and Azure accounts.
+3. Open the **CloudDock panel** from the sidebar.
+4. Provision new instances or create multicloud groups.
+5. Schedule shutdown times to avoid unnecessary costs.
+6. Monitor live usage and perform instance actions from VS Code.
 
 ---
 
-## 📦 Tech Stack
+## 🧪 Example Workflow
 
-- `TypeScript`
-- `Webpack`
-- `VS Code API`
-- `Supabase`
-- `Docker`
+- Launch an **Azure VM** and an **AWS EC2 instance** in one multicloud group.
+- Schedule both to shut down in 2 hours to prevent billing overages.
+- Use CloudDock to track cloud spend and control both environments from one place.
 
 ---
 
-## 🧪 Local Testing
+## 🧠 Built For Developers
 
-Run all watchers and start the debugger to test live changes to your extension inside a VS Code Development Host.
+Unlike heavy enterprise cloud management platforms, CloudDock is:
+
+- 🪶 **Lightweight** – No complicated dashboards or governance policies
+- ⚙️ **Fast** – Designed for on-demand provisioning and real-time control
+- 🧑‍💻 **Developer-centric** – All within your code editor
 
 ---
 
-## 📝 License
+## 💡 Ideal For
 
-MIT License © 2025
+- Developers testing cloud-based features across providers  
+- Teams that need **temporary** multicloud environments  
+- Anyone tired of jumping between cloud consoles just to spin up or shut down resources
 
+---
+
+## 📄 License
+
+MIT License

@@ -37,10 +37,12 @@ View real-time cost data from both **AWS and Azure**, side-by-side, inside your 
 
 1. Install the **CloudDock** extension from the VS Code Marketplace.
 2. Authenticate with your AWS and Azure accounts.
-3. Open the **CloudDock panel** from the sidebar.
-4. Provision new instances or create multicloud groups.
-5. Schedule shutdown times to avoid unnecessary costs.
-6. Monitor live usage and perform instance actions from VS Code.
+3. **[AWS Only]** Set up the required IAM role:
+   👉 [Click here to deploy the IAM Role via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml)
+4. Open the **CloudDock panel** from the sidebar.
+5. Provision new instances or create multicloud groups.
+6. Schedule shutdown times to avoid unnecessary costs.
+7. Monitor live usage and perform instance actions from VS Code.
 
 ---
 

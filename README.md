@@ -9,6 +9,7 @@
 [!TIP] Spending too much time bouncing between AWS and Azure portals just to test your code?
 
 CloudDock gives you one unified interface to manage both clouds, so you can stay focused on building — not babysitting infrastructure.
+**CloudDock gives you a button, not a Bash script.**
 
 ☁️ View the full source on GitHub: [ep1401/DevTestManager](https://github.com/ep1401/DevTestManager)
 

@@ -1,6 +1,6 @@
 {
-  "name": "infinite-poc",
-  "publisher": "ng",
+  "name": "devtest-manager",
+  "publisher": "EthanPuckett",
   "displayName": "DevTest Manager",
   "description": "Vs code extension poc",
   "version": "0.0.1",
@@ -26,7 +26,7 @@
         {
           "id": "infinite-poc-view",
           "title": "DevTest Manager",
-          "icon": "media/icons/infinity-svgrepo-com.svg"
+          "icon": "media/icons/clouddock.svg"
         }
       ]
     },
@@ -164,7 +164,7 @@
         "ipoc.welcom.message.string": {
           "type": "string",
           "description": "please enter welcome message",
-          "default": "Welcome to the Multicloud DevTest Manager!"
+          "default": "Welcome to CloudDock!"
         },
         "ipoc.open.browser.sites": {
           "type": "array",

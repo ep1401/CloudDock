@@ -1814,7 +1814,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
         <html lang="en">
         <head>
            <meta charset="UTF-8">
-           <title>Cloud Instance Manager</title>
+           <title>CloudDock</title>
            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
            <style>
@@ -3712,7 +3712,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
         <body>
             <div class="container">
                 <div class="title">
-                    Cloud Instance Manager
+                    CloudDock
                 </div>
                 <ul class="nav nav-tabs" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">

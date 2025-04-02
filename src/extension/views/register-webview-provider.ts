@@ -2512,7 +2512,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                         const statusItem = Array.from(entry.querySelectorAll("ul li"))
                                             .find(li => li.textContent.trim().startsWith("Status:"));
                                         if (statusItem) {
-                                            statusItem.textContent = "Status: stopped";
+                                            statusItem.textContent = "Status: deallocated";
                                         }
                                     }
                                 });

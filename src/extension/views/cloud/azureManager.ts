@@ -542,7 +542,7 @@ export class AzureManager {
                 }
     
                 console.log(`🛑 Stopping VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
-                await computeClient.virtualMachines.beginPowerOffAndWait(resourceGroup, vmName);
+                await computeClient.virtualMachines.beginDeallocateAndWait(resourceGroup, vmName);
     
                 stoppedVMs.push({ vmId, subscriptionId });
             } catch (error) {

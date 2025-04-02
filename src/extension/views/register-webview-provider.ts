@@ -2246,10 +2246,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             const instanceList = document.getElementById("instancesTable");
 
-                            // Remove the "Waiting for connection..." row if it's still there
-                            const initialRow = document.getElementById("initialRow");
-                            if (initialRow) {
-                                initialRow.remove();
+                            // 🔧 Remove placeholder row if it's still visible
+                            for (const child of instanceList.children) {
+                                const text = child.textContent.trim();
+                                if (text === "Waiting for connection..." || text === "No instances found.") {
+                                    instanceList.removeChild(child);
+                                    break;
+                                }
                             }
 
                             // Create list item for the new instance
@@ -2315,10 +2318,13 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             const vmList = document.querySelector("#vmsTable");
 
-                            // Remove "No active VMs found" if present
-                            const noVMsRow = document.querySelector("#initialRow");
-                            if (noVMsRow) {
-                                noVMsRow.remove();
+                            // ✅ Remove any placeholder row (either "Waiting for connection..." or "No active VMs found.")
+                            for (const child of vmList.children) {
+                                const text = child.textContent.trim();
+                                if (text === "Waiting for connection..." || text === "No active VMs found.") {
+                                    vmList.removeChild(child);
+                                    break;
+                                }
                             }
 
                             // Create list item (acts like a row)

@@ -593,34 +593,120 @@ export class AzureManager {
         return startedVMs;
     }
     
-
     async deleteVMs(userId: string, vms: { vmId: string; subscriptionId: string }[]) {
         const userSession = await this.getUserSession(userId);
         if (!userSession || !userSession.azureCredential) {
             throw new Error("No authenticated session found for the provided userId. Please authenticate first.");
         }
-        
+    
         const azureCredential = userSession.azureCredential;
-        let deletedVMs: { vmId: string; subscriptionId: string }[] = [];
-        
+        const deletedVMs: { vmId: string; subscriptionId: string }[] = [];
+    
         for (const { vmId, subscriptionId } of vms) {
             try {
                 const vmDetails = vmId.split("/");
-                const resourceGroup = vmDetails[4]; // Extracting resource group from VM ID
-                const vmName = vmDetails[8]; // Extracting VM name from VM ID
+                const resourceGroup = vmDetails[4];
+                const vmName = vmDetails[8];
     
-                console.log(`🗑️ Deleting VM: ${vmName} in Resource Group: ${resourceGroup}, Subscription: ${subscriptionId}`);
                 const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
+                const networkClient = new NetworkManagementClient(azureCredential, subscriptionId);
+    
+                const vm = await computeClient.virtualMachines.get(resourceGroup, vmName);
+                console.log(`🗑️ Deleting VM: ${vmName}`);
                 await computeClient.virtualMachines.beginDeleteAndWait(resourceGroup, vmName);
+    
+                // Poll for actual deletion to avoid "still attached" errors
+                const maxWaitMs = 15000;
+                const pollInterval = 3000;
+                let elapsed = 0;
+                while (elapsed < maxWaitMs) {
+                    try {
+                        await computeClient.virtualMachines.get(resourceGroup, vmName);
+                        await new Promise(res => setTimeout(res, pollInterval));
+                        elapsed += pollInterval;
+                    } catch (err: any) {
+                        if (err.statusCode === 404) break; // VM is fully deleted
+                        throw err;
+                    }
+                }
+    
+                const diskDeleteTasks: Promise<any>[] = [];
+    
+                const osDiskName = vm.storageProfile?.osDisk?.name;
+                if (osDiskName) {
+                    console.log(`💽 Deleting OS Disk: ${osDiskName}`);
+                    diskDeleteTasks.push(computeClient.disks.beginDeleteAndWait(resourceGroup, osDiskName));
+                }
+    
+                const dataDisks = vm.storageProfile?.dataDisks || [];
+                for (const disk of dataDisks) {
+                    if (disk.name) {
+                        console.log(`🧹 Deleting Data Disk: ${disk.name}`);
+                        diskDeleteTasks.push(computeClient.disks.beginDeleteAndWait(resourceGroup, disk.name));
+                    }
+                }
+    
+                const nicDeleteTasks: Promise<any>[] = [];
+                const publicIpDeleteTasks: Promise<any>[] = [];
+                const vnetDeleteTasks: Promise<any>[] = [];
+                const vnetsToDelete = new Set<string>();
+    
+                for (const nicRef of vm.networkProfile?.networkInterfaces || []) {
+                    const nicId = nicRef.id || "";
+                    const nicName = nicId.split("/").pop()!;
+                    const nic = await networkClient.networkInterfaces.get(resourceGroup, nicName);
+    
+                    // Detach Public IP from NIC
+                    let pipName: string | null = null;
+                    for (const ipConfig of nic.ipConfigurations || []) {
+                        if (ipConfig.publicIPAddress) {
+                            pipName = ipConfig.publicIPAddress.id?.split("/").pop() || null;
+                            ipConfig.publicIPAddress = undefined;
+                        }
+                    }
+    
+                    if (pipName) {
+                        console.log(`🔧 Detaching Public IP: ${pipName} from NIC: ${nicName}`);
+                        await networkClient.networkInterfaces.beginCreateOrUpdateAndWait(resourceGroup, nicName, nic);
+                    }
+    
+                    // Delete NIC
+                    console.log(`🔌 Deleting NIC: ${nicName}`);
+                    nicDeleteTasks.push(networkClient.networkInterfaces.beginDeleteAndWait(resourceGroup, nicName));
+    
+                    // Delete Public IP
+                    if (pipName) {
+                        console.log(`🌐 Deleting Public IP: ${pipName}`);
+                        publicIpDeleteTasks.push(networkClient.publicIPAddresses.beginDeleteAndWait(resourceGroup, pipName));
+                    }
+    
+                    const subnetId = nic.ipConfigurations?.[0]?.subnet?.id;
+                    if (subnetId) {
+                        const vnetName = subnetId.split("/")[8];
+                        vnetsToDelete.add(vnetName);
+                    }
+                }
+    
+                await Promise.all(nicDeleteTasks);
+                await Promise.all(publicIpDeleteTasks);
+    
+                for (const vnetName of vnetsToDelete) {
+                    console.log(`🌐 Deleting VNet: ${vnetName}`);
+                    vnetDeleteTasks.push(networkClient.virtualNetworks.beginDeleteAndWait(resourceGroup, vnetName));
+                }
+    
+                await Promise.all(vnetDeleteTasks);
+                await Promise.all(diskDeleteTasks);
+    
                 deletedVMs.push({ vmId, subscriptionId });
             } catch (error) {
-                console.error(`❌ Failed to delete VM with ID ${vmId}:`, error);
+                console.error(`❌ Failed to fully delete VM ${vmId}:`, error);
             }
         }
     
         return deletedVMs;
-    }
-
+    }    
+    
     /**
      * Fetches all instances for an Azure user.
      * @param userId Unique ID for Azure session.

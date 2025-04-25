@@ -11,14 +11,6 @@ CloudDock brings essential multicloud control directly into the development envi
 
 While this project supports persistent background scheduling and cost visibility, **the background scheduler will only remain active as long as the VS Code environment is running**. Full production-grade deployment scenarios (such as persistent server-based scheduling) are outside the scope of this prototype.
 
-## Key Benefits
-
-- Simplifies multicloud environment management
-- Prevents unnecessary cloud spending through automated shutdowns
-- Enables provisioning of AWS and Azure instances without leaving VS Code
-- Provides visibility into live cloud usage and cost metrics
-- Streamlines developer workflows by reducing reliance on cloud provider portals
-
 ## Installation and Setup
 
 1. Install the **CloudDock** extension from the Visual Studio Code Marketplace.

@@ -38,16 +38,16 @@ Follow these steps to run CloudDock locally inside Visual Studio Code:
    cd CloudDock
 
 2. **Install dependencies and compile the project** by running:
-  ```bash
-  npm install
-  npm run compile
+   ```bash
+   npm install
+   npm run compile
 
 3. **Run the extension locally:**
-  - Press **Control + Fn + F5** (or just **F5**, depending on your keyboard).
+  - Press **Control + Fn + F5**.
   - This will open a new **Extension Development Host** window.
 
 4. **Authenticate with your cloud accounts:**
-  - **AWS Users:** Configure the required IAM role using the provided CloudFormation template.
+  - **AWS Users:** Configure the required IAM role using the provided CloudFormation template: [Deploy via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml).
   - **Azure Users:** Authenticate using the Microsoft sign-in prompt through Visual Studio Code.
 
 5. **Manage your cloud resources** directly from the CloudDock sidebar

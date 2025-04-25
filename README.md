@@ -7,9 +7,9 @@
 > **CloudDock is a research project prototype and is *not intended for production environments*.**
 ## Overview
 
-CloudDock brings essential multicloud control directly into the development environment. By integrating AWS and Azure VM management into a single, unified interface inside Visual Studio Code, it reduces context switching, prevents unnecessary resource costs, and streamlines infrastructure management during software development and testing workflows.
+CloudDock brings multicloud infrastructure control directly into the environment of the developer. By integrating AWS and Azure VM management into a single, unified interface inside VS Code, it reduces context switching, reduces unnecessary resource expense, and streamlines multicloud infrastructure management.
 
-While this project supports persistent background scheduling and cost visibility, **the background scheduler will only remain active as long as the VS Code environment is running**. Full production-grade deployment scenarios (such as persistent server-based scheduling) are outside the scope of this prototype.
+While this project supports persistent background scheduling and cost visibility, **the background scheduler will only remain active as long as the VS Code environment is running**. Full production grade deployment scenarios are outside the scope of this prototype.
 
 ## Installation and Setup
 
@@ -18,11 +18,10 @@ While this project supports persistent background scheduling and cost visibility
 3. For AWS users, you must configure the required IAM role found here:  
    [Deploy via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml)
 4. Open the **CloudDock** panel from the sidebar.
-5. Provision instances, schedule shutdowns, and manage environments as needed.
 
 ## Local Installation and Setup
 
-Follow the steps below to run CloudDock locally inside Visual Studio Code:
+Follow the steps below to run CloudDock locally:
 
 1. **Clone the repository:**
    ```bash
@@ -39,11 +38,9 @@ Follow the steps below to run CloudDock locally inside Visual Studio Code:
   - This will open a new **Extension Development Host** window.
 
 4. **Authenticate with your cloud accounts:**
-  - **AWS Users:** Configure the required IAM role using the provided CloudFormation template: [Deploy via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml).
+  - **AWS Users:** Configure the required IAM role found here:
+    [Deploy via CloudFormation](https://us-east-2.console.aws.amazon.com/cloudformation/home?#/stacks/create/review?stackName=EC2ManagementRole&templateURL=https://my-ec2-role-templates.s3.us-east-2.amazonaws.com/iam-role-template.yaml).
   - **Azure Users:** Authenticate using the Microsoft sign-in prompt through Visual Studio Code.
-
-5. **Manage your cloud resources** 
-   -  Provision instances, schedule shutdowns, and manage environments as needed.
 
 ## License
 

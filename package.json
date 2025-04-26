@@ -3,7 +3,7 @@
   "publisher": "ep04052004",
   "displayName": "CloudDock",
   "description": "Lightweight multicloud VM manager for developers.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "media/icons/logo.png",
   "engines": {
     "vscode": "^1.72.0"

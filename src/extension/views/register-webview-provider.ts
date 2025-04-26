@@ -18,7 +18,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
     private viewInstances: Map<string, WebviewView> = new Map();
 
     // Map webview IDs to user accounts
-    private userSessions: Map<string, Record<string, string>> = new Map(); // Maps webviewId -> userId
+    private userSessions: Map<string, Record<string, string>> = new Map(); 
 
     constructor(private readonly _extensionUri: Uri, public extensionContext: ExtensionContext) {
         this.scheduler = scheduler;
@@ -27,8 +27,17 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
     resolveWebviewView(webviewView: WebviewView, _context: WebviewViewResolveContext, _token: CancellationToken) {
         // Assign a unique ID to this webview
         const webviewId = uuidv4();
-        this.viewInstances.set(webviewId, webviewView);
 
+        (webviewView as any)._myWebviewId = webviewId;
+
+        this.viewInstances.set(webviewId, webviewView);
+        this.userSessions.set(webviewId, {});
+
+
+        this.viewInstances.clear();
+        this.userSessions.clear();
+                
+        this.viewInstances.set(webviewId, webviewView);
         this.userSessions.set(webviewId, {});
 
         webviewView.webview.options = { enableScripts: true };
@@ -48,7 +57,9 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
-            const { provider, type, payload, webviewId } = data;
+            const { provider, type, payload } = data;
+            const webviewId = (webviewView as any)._myWebviewId;
+
             const userSession = this.userSessions.get(webviewId) || {}; 
             let userId = userSession[provider];
 

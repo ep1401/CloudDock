@@ -49,3 +49,7 @@ This extension is open-source and licensed under the [MIT License](LICENSE).
 ---
 
 View the full source code on GitHub: [ep1401/CloudDock](https://github.com/ep1401/CloudDock)
+
+> **Acknowledgment:**  
+> The initial setup of this extension was guided by the tutorial ["How to Create a VS Code Extension" by Code 360](https://www.youtube.com/watch?v=mBcVxsoR1vk).
+

@@ -50,7 +50,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
         webviewView.webview.html = this.getHtmlForWebview(connectHtml, awsHtml, azureHtml, multiHtml);
 
-        // ✅ Delay sending message to ensure the WebView is ready
+        // Delay sending message to ensure the WebView is ready
         setTimeout(() => {
             this.postMessage(webviewId, { type: "webviewInitialized", webviewId });
         }, 500);
@@ -75,11 +75,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userId = result.userAccountId;
 
                                 if (typeof userId === "string" && userId.trim().length > 0) {
-                                    // ✅ Store userId for this webview
+                                    // Store userId for this webview
                                     userSession[provider] = userId;
                                     this.userSessions.set(webviewId, userSession);
 
-                                    // ✅ Send messages to update UI
+                                    // Send messages to update UI
                                     this.postMessage(webviewId, { type: `${provider}Connected`, userId });
 
                                     if (provider === "aws") {
@@ -129,7 +129,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                         }
                                     }
 
-                                    // ✅ Check if the *other* provider is already connected
+                                    // Check if the *other* provider is already connected
                                     const otherProvider = provider === "aws" ? "azure" : "aws";
                                     const otherUserId = userSession[otherProvider];
 
@@ -169,7 +169,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const multiGroups = await this.cloudManager.getMultiCloudGroupNames(awsId, azureId);
                                             console.log("🌐 Multi-cloud groups found:", multiGroups);
 
-                                            // ✅ Send multi-group update to frontend
+                                            // Send multi-group update to frontend
                                             this.postMessage(webviewId, {
                                                 type: "updateMultiGroups",
                                                 multiGroups,
@@ -185,10 +185,10 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                             const currentCost = sanitizeCost(result.cost);
                                             const otherCost = sanitizeCost(await this.cloudManager.getMonthlyCostUnified(otherProvider, otherUserId));
                                             
-                                            // 🧠 Add string values as floats and format as a string again
+                                            // Add string values as floats and format as a string again
                                             const totalCost = (currentCost + otherCost).toFixed(2);
                                             
-                                            // 💰 Post total combined cost
+                                            // Post total combined cost
                                             this.postMessage(webviewId, {
                                                 type: "updateCombinedCost",
                                                 provider: "both",
@@ -246,7 +246,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // ✅ Retrieve the correct user ID based on the provider
+                            // Retrieve the correct user ID based on the provider
                             const instanceUserId = userSession[provider]; 
 
                             if (!instanceUserId) {
@@ -255,7 +255,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // ✅ Validate required parameters based on provider
+                            // Validate required parameters based on provider
                             if (provider === "aws") {
                                 if (!payload || !payload.keyPair || !payload.region) {
                                     console.error("❌ Missing parameters for AWS instance creation.");
@@ -265,7 +265,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 console.log(`📤 Creating AWS Instance for userId: ${instanceUserId} in region: ${payload.region} with key pair: ${payload.keyPair}`);
 
                                 try {
-                                    // ✅ Call `createInstance` for AWS
+                                    // Call `createInstance` for AWS
                                     window.showInformationMessage('Creating AWS Instance...');
                                     const instanceId = await this.cloudManager.createInstance(provider, instanceUserId, {
                                         keyPair: payload.keyPair,
@@ -280,7 +280,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                     console.log(`✅ AWS Instance created successfully. Instance ID: ${instanceId}`);
                                     console.log("Instance ID Structure:", JSON.stringify(instanceId, null, 2));
-                                    // ✅ Notify the webview about the created instance
+                                    // Notify the webview about the created instance
                                     this.postMessage(webviewId, {
                                         type: "instanceCreated",
                                         instanceId: instanceId.instanceId, 
@@ -304,7 +304,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 console.log(`📤 Creating Azure VM for userId: ${instanceUserId} in region: ${payload.region}, Subscription: ${payload.subscriptionId}, Resource Group: ${payload.resourceGroup}`);
 
                                 try {
-                                    // ✅ Call `createInstance` for Azure
+                                    // Call `createInstance` for Azure
                                     window.showInformationMessage('Creating Azure VM... This may take a few minutes.');
                                     const vmId = await this.cloudManager.createInstance(provider, instanceUserId, {
                                         subscriptionId: payload.subscriptionId,
@@ -321,7 +321,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                                     console.log(`✅ Azure VM created successfully. VM ID: ${vmId}`);
 
-                                    // ✅ Notify the webview about the created instance
+                                    // Notify the webview about the created instance
                                     this.postMessage(webviewId, {
                                         type: "vmCreated",
                                         instanceId: vmId.vmId,
@@ -352,7 +352,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const subscriptionId = payload.subscriptionId;
                             console.log(`🔹 Fetching resource groups for Subscription ID: ${subscriptionId}`);
 
-                            // ✅ Ensure Azure user ID is retrieved correctly
+                            // Ensure Azure user ID is retrieved correctly
                             const azureUserId = userSession["azure"];
                             if (!azureUserId) {
                                 console.error("❌ No Azure user session found.");
@@ -360,7 +360,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // ✅ Call the function from `cloudManager` to fetch resource groups
+                            // Call the function from `cloudManager` to fetch resource groups
                             const resourceGroups = await this.cloudManager.getResourceGroupsForSubscription("azure", azureUserId, subscriptionId);
 
                             if (!resourceGroups || !Array.isArray(resourceGroups)) {
@@ -371,11 +371,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log(`✅ Retrieved ${resourceGroups.length} resource groups for subscription ${subscriptionId}.`);
 
-                            // ✅ Send resource groups back to the UI
+                            // Send resource groups back to the UI
                             this.postMessage(webviewId, { 
                                 type: "updateResourceGroups", 
                                 resourceGroups: { [subscriptionId]: resourceGroups }, 
-                                userId: azureUserId  // ✅ Send the correct Azure user ID
+                                userId: azureUserId  // Send the correct Azure user ID
                             });
 
                         } catch (error) {
@@ -396,7 +396,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAWS = userSession["aws"];
 
-                        // 🔥 Fix: Ensure `payload` exists and contains `instanceIds`
+                        // Ensure `payload` exists and contains `instanceIds`
                         if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
                             console.warn("❌ Invalid shutdown request: No instance IDs provided.");
                             window.showErrorMessage("No instances selected for shutdown.");
@@ -409,7 +409,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Stopping ${instanceIds.length} instance(s): ${instanceIds.join(", ")}`);
 
                         try {
-                            // ✅ Call `shutdownInstances` in CloudManager
+                            // Call `shutdownInstances` in CloudManager
                             await this.cloudManager.shutdownInstances(userIdAWS, instanceIds);
                             console.log(`✅ Successfully initiated shutdown for instances: ${instanceIds.join(", ")}`);
                             this.postMessage(webviewId, { 
@@ -435,7 +435,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAzure = userSession["azure"];
 
-                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        // Ensure `payload` exists and contains valid `vms` array
                         if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
                             console.warn("❌ Invalid shutdown request: No VM IDs provided.");
                             window.showErrorMessage("No VMs selected for shutdown.");
@@ -452,11 +452,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Stopping ${vmsToStop.length} VM(s)...`);
 
                         try {
-                            // ✅ Call `stopVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            // Call `stopVMs` in `CloudManager` and pass VM IDs and Subscription IDs
                             await this.cloudManager.stopVMs(userIdAzure, vmsToStop);
                             console.log(`✅ Successfully initiated shutdown for VMs:`, vmsToStop);
 
-                            // ✅ Notify webview that VMs were stopped
+                            // Notify webview that VMs were stopped
                             this.postMessage(webviewId, { 
                                 type: "stoppedVMs", 
                                 stoppedVMs: vmsToStop, 
@@ -481,11 +481,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         const userIdAWSRef = userSession["aws"];
 
                         try {
-                            // ✅ Call the function in CloudManager to fetch updated instances
+                            // Call the function in CloudManager to fetch updated instances
                             const updatedInstances = await this.cloudManager.refreshAWSInstances(userIdAWSRef);
                             window.showInformationMessage("Refreshing AWS Instances...");
 
-                            // ✅ Send the updated instance list back to the Webview
+                            // Send the updated instance list back to the Webview
                             this.postMessage(webviewId, { 
                                 type: "updateInstances", 
                                 instances: updatedInstances, 
@@ -511,11 +511,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         const userIdAzureRef = userSession["azure"];
 
                         try {
-                            // ✅ Call the function in CloudManager to fetch updated VMs
+                            // Call the function in CloudManager to fetch updated VMs
                             window.showInformationMessage("Refreshing Azure VMs...");
                             const updatedVMs = await this.cloudManager.refreshAzureInstances(userIdAzureRef);
                             window.showInformationMessage("Azure Vms Updated");
-                            // ✅ Send the updated VM list back to the Webview
+                            // Send the updated VM list back to the Webview
                             this.postMessage(webviewId, { 
                                 type: "updateVMs", 
                                 VMs: updatedVMs, 
@@ -590,7 +590,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAWSter = userSession["aws"];
 
-                        // 🔥 Ensure `payload` exists and contains `instanceIds`
+                        // Ensure `payload` exists and contains `instanceIds`
                         if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
                             console.warn("❌ Invalid terminate request: No instance IDs provided.");
                             window.showErrorMessage("No instances selected for termination.");
@@ -603,11 +603,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Terminating ${instanceIdster.length} instance(s): ${instanceIdster.join(", ")}`);
 
                         try {
-                            // ✅ Call `terminateAWSInstances` in CloudManager
+                            // Call `terminateAWSInstances` in CloudManager
                             await this.cloudManager.terminateAWSInstances(userIdAWSter, instanceIdster);
                             console.log(`✅ Successfully initiated termination for instances: ${instanceIdster.join(", ")}`);
 
-                            // ✅ Send a message back to the Webview to update the UI
+                            // Send a message back to the Webview to update the UI
                             this.postMessage(webviewId, { 
                                 type: "terminatedResources", 
                                 terminatedInstances: instanceIdster, 
@@ -631,7 +631,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAzureTer = userSession["azure"];
 
-                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        // Ensure `payload` exists and contains valid `vms` array
                         if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
                             console.warn("❌ Invalid termination request: No VM IDs provided.");
                             window.showErrorMessage("No VMs selected for termination.");
@@ -648,11 +648,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Terminating ${vmsToTerminate.length} VM(s)...`);
 
                         try {
-                            // ✅ Call `deleteVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            // Call `deleteVMs` in `CloudManager` and pass VM IDs and Subscription IDs
                             await this.cloudManager.deleteVMs(userIdAzureTer, vmsToTerminate);
                             console.log(`✅ Successfully initiated termination for VMs:`, vmsToTerminate);
 
-                            // ✅ Notify webview that VMs were terminated
+                            // Notify webview that VMs were terminated
                             this.postMessage(webviewId, { 
                                 type: "terminatedVMs", 
                                 terminatedVMs: vmsToTerminate, 
@@ -676,7 +676,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAWSstart = userSession["aws"];
 
-                        // 🔥 Ensure `payload` exists and contains `instanceIds`
+                        // Ensure `payload` exists and contains `instanceIds`
                         if (!payload || !payload.instanceIds || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
                             console.warn("❌ Invalid start request: No instance IDs provided.");
                             window.showErrorMessage("No instances selected for starting.");
@@ -689,11 +689,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Starting ${instanceIdsStart.length} instance(s): ${instanceIdsStart.join(", ")}`);
 
                         try {
-                            // ✅ Call `startAWSInstances` in CloudManager
+                            // Call `startAWSInstances` in CloudManager
                             await this.cloudManager.startAWSInstances(userIdAWSstart, instanceIdsStart);
                             console.log(`✅ Successfully initiated start for instances: ${instanceIdsStart.join(", ")}`);
 
-                            // ✅ Send a message back to the Webview to update the UI
+                            // Send a message back to the Webview to update the UI
                             this.postMessage(webviewId, { 
                                 type: "startedResources", 
                                 startedInstances: instanceIdsStart, 
@@ -717,7 +717,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         const userIdAzureStart = userSession["azure"];
 
-                        // 🔥 Fix: Ensure `payload` exists and contains valid `vms` array
+                        // Ensure `payload` exists and contains valid `vms` array
                         if (!payload || !payload.vms || !Array.isArray(payload.vms) || payload.vms.length === 0) {
                             console.warn("❌ Invalid start request: No VM IDs provided.");
                             window.showErrorMessage("No VMs selected for start.");
@@ -734,11 +734,11 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Starting ${vmsToStart.length} VM(s)...`);
 
                         try {
-                            // ✅ Call `startVMs` in `CloudManager` and pass VM IDs and Subscription IDs
+                            // Call `startVMs` in `CloudManager` and pass VM IDs and Subscription IDs
                             await this.cloudManager.startVMs(userIdAzureStart, vmsToStart);
                             console.log(`✅ Successfully initiated start for VMs:`, vmsToStart);
 
-                            // ✅ Notify webview that VMs were started
+                            // Notify webview that VMs were started
                             this.postMessage(webviewId, { 
                                 type: "startedVMs", 
                                 startedVMs: vmsToStart, 
@@ -760,7 +760,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Retrieve user session based on provider
+                        // Retrieve user session based on provider
                         const userIdCreateGroup = userSession[provider];
 
                         if (!userIdCreateGroup) {
@@ -769,7 +769,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Validate required parameters
+                        // Validate required parameters
                         if (!payload || !Array.isArray(payload.instanceIds) || payload.instanceIds.length === 0) {
                             console.warn("❌ Invalid group creation request: Missing instance IDs.");
                             window.showErrorMessage("Missing instances for group creation.");
@@ -782,7 +782,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Creating ${provider.toUpperCase()} Group with ${instancesNewGroup.length} instance(s).`);
 
                         try {
-                            // ✅ Call the general `createGroup` function in CloudManager
+                            // Call the general `createGroup` function in CloudManager
                             const groupname = await this.cloudManager.createGroup(
                                 provider,
                                 { [provider]: userIdCreateGroup },
@@ -795,7 +795,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             }
                             console.log(`✅ Successfully created ${provider.toUpperCase()} group.`);
 
-                            // ✅ Notify the webview about the created group
+                            // Notify the webview about the created group
                             this.postMessage(webviewId, {
                                 type: "groupCreated",
                                 provider,
@@ -957,7 +957,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 azureInstanceIds
                             });
 
-                            // ✅ Create group with both user IDs and instance IDs
+                            // Create group with both user IDs and instance IDs
                             const groupName = await this.cloudManager.createGroup(
                                 "both",
                                 { aws: userIdAwsCreate, azure: userIdAzureCreate },
@@ -967,7 +967,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (!groupName) return;
 
-                            // ✅ Multi-tab view
+                            // Multi-tab view
                             this.postMessage(webviewId, {
                                 type: "multiGroupCreated",
                                 provider: "both",
@@ -980,7 +980,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userIdAzure: userIdAzureCreate
                             });
 
-                            // ✅ AWS-specific tab sync
+                            // AWS-specific tab sync
                             if (awsInstanceIds.length > 0) {
                                 this.postMessage(webviewId, {
                                     type: "groupCreated",
@@ -991,7 +991,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             }
 
-                            // ✅ Azure-specific tab sync
+                            // Azure-specific tab sync
                             if (azureInstanceIds.length > 0) {
                                 const azurePayloadInstances = azure.map(vm => ({
                                     vmId: vm.vmId,
@@ -1056,7 +1056,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Adding ${instancesToAdd.length} instance(s) to a group.`);
 
                         try {
-                            // ✅ Call the general `addInstancesToGroup` function in CloudManager
+                            // Call the general `addInstancesToGroup` function in CloudManager
                             const groupname = await this.cloudManager.addInstancesToGroup(provider, userIdAddGroup, instancesToAdd, []);
 
                             if (!groupname) {
@@ -1064,7 +1064,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             }
                             console.log(`✅ Successfully added instances to group: ${instancesToAdd.join(", ")}`);
 
-                            // ✅ Send message back to Webview to update UI
+                            // Send message back to Webview to update UI
                             this.postMessage(webviewId, {
                                 type: "groupCreated",
                                 provider,
@@ -1116,7 +1116,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
                         
-                            // ✅ Extract VM and subscription IDs
+                            // Extract VM and subscription IDs
                             const instanceIdsToAdd: string[] = payload.instances.map((i: { vmId: string }) => i.vmId);
                             const subscriptionIdsToAdd: string[] = payload.instances.map((i: { subscriptionId: string }) => i.subscriptionId);
                         
@@ -1136,7 +1136,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 console.log(`✅ Successfully added Azure instances to group: ${instanceIdsToAdd.join(", ")}`);
                                 console.log("group name: ", groupname);
                         
-                                // ✅ Notify the Webview to update
+                                // Notify the Webview to update
                                 this.postMessage(webviewId, {
                                     type: "groupCreatedAzure",
                                     provider: "azure",
@@ -1212,7 +1212,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 azureInstanceIds
                             });
 
-                            // ✅ Call updated CloudManager logic
+                            // Call updated CloudManager logic
                             const groupName = await this.cloudManager.addInstancesToGroup(
                                 "both",
                                 { aws: userIdAwsAdd, azure: userIdAzureAdd },
@@ -1222,7 +1222,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (!groupName) return;
 
-                            // ✅ Notify UI
+                            // Notify UI
                             this.postMessage(webviewId, {
                                 type: "multiGroupCreated",
                                 provider: "both",
@@ -1245,7 +1245,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             }
                     
-                            // ✅ Also send Azure-specific update if any Azure instances were added
+                            // Also send Azure-specific update if any Azure instances were added
                             if (azureInstanceIds.length > 0) {
                                 this.postMessage(webviewId, {
                                     type: "groupCreatedAzure",
@@ -1288,7 +1288,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Removing ${instancesToRemove.length} instance(s) from a group.`);
 
                         try {
-                            // ✅ Call the general `removeInstancesFromGroup` function in CloudManager
+                            // Call the general `removeInstancesFromGroup` function in CloudManager
                             const groupname = await this.cloudManager.removeInstancesFromGroup(provider, userIdRemoveGroup, instancesToRemove);
 
                             if (!groupname) {
@@ -1296,7 +1296,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             }
                             console.log(`✅ Successfully removed instances from group: ${instancesToRemove.join(", ")}`);
 
-                            // ✅ Send message back to Webview to update UI
+                            // Send message back to Webview to update UI
                             this.postMessage(webviewId, {
                                 type: "groupCreated",
                                 provider,
@@ -1441,7 +1441,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 azureVmIds
                             });
 
-                            // ✅ Call CloudManager logic to remove from group
+                            // Call CloudManager logic to remove from group
                             const groupName = await this.cloudManager.removeInstancesFromGroup(
                                 "both",
                                 { aws: userIdAwsRemove, azure: userIdAzureRemove },
@@ -1450,7 +1450,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             if (!groupName) return;
 
-                            // ✅ Notify frontend
+                            // Notify frontend
                             this.postMessage(webviewId, {
                                 type: "multiGroupCreated",
                                 provider: "both",
@@ -1473,7 +1473,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             }
                     
-                            // ✅ Azure tab sync (if applicable)
+                            // Azure tab sync (if applicable)
                             if (azureVmIds.length > 0) {
                                 this.postMessage(webviewId, {
                                     type: "groupCreatedAzure",
@@ -1501,7 +1501,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Retrieve user session based on provider
+                        // Retrieve user session based on provider
                         const userIdSetDowntime = userSession[provider];
 
                         if (!userIdSetDowntime) {
@@ -1510,7 +1510,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Validate required parameters
+                        // Validate required parameters
                         if (!payload || !payload.groupName) {
                             console.warn("❌ Invalid downtime request: Missing group name.");
                             window.showErrorMessage("Missing required details for setting group downtime.");
@@ -1523,12 +1523,12 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Setting downtime for group '${groupName}'.`);
 
                         try {
-                            // ✅ Call the general `setGroupDowntime` function in CloudManager
+                            // Call the general `setGroupDowntime` function in CloudManager
                             const time = await this.cloudManager.setGroupDowntime(provider, groupName);
 
                             console.log(`✅ Successfully set downtime for ${provider.toUpperCase()} group '${groupName}'.`);
 
-                            // ✅ Notify the webview about the updated downtime
+                            // Notify the webview about the updated downtime
                             if (provider === "aws") {
                                 this.postMessage(webviewId, {
                                     type: "groupDowntimeSet",
@@ -1608,7 +1608,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userId: userIdAzureSet
                             });
 
-                            // ✅ Post to Multi UI
+                            // Post to Multi UI
                             this.postMessage(webviewId, {
                                 type: "groupDowntimeSetMulti",
                                 provider: "both",
@@ -1634,7 +1634,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Retrieve user session based on provider
+                        // Retrieve user session based on provider
                         const userIdDeleteDowntime = userSession[provider];
 
                         if (!userIdDeleteDowntime) {
@@ -1643,7 +1643,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             return;
                         }
 
-                        // ✅ Validate required parameters
+                        // Validate required parameters
                         if (!payload || !payload.groupName) {
                             console.warn("❌ Invalid downtime delete request: Missing group name.");
                             window.showErrorMessage("Missing required details for deleting group downtime.");
@@ -1656,7 +1656,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         window.showInformationMessage(`Deleting downtime for group '${groupNameDel}'.`);
 
                         try {
-                            // ✅ Call the general `removeGroupDowntime` function in CloudManager
+                            // Call the general `removeGroupDowntime` function in CloudManager
                             const success = await this.cloudManager.removeGroupDowntime(groupNameDel);
 
                             if (!success) {
@@ -1667,7 +1667,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log(`✅ Successfully removed downtime for ${provider.toUpperCase()} group '${groupNameDel}'.`);
 
-                            // ✅ Notify the webview about the deleted downtime
+                            // Notify the webview about the deleted downtime
                             if (provider === "aws") {
                                 this.postMessage(webviewId, {
                                     type: "groupDowntimeDeleted",
@@ -1732,7 +1732,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log(`✅ Successfully removed downtime for MULTI-CLOUD group '${multiGroupNameDelete}'.`);
 
-                            // 🔁 Notify AWS tab
+                            // Notify AWS tab
                             this.postMessage(webviewId, {
                                 type: "groupDowntimeDeleted",
                                 provider: "aws",
@@ -1740,7 +1740,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userId: userIdAwsDelete
                             });
 
-                            // 🔁 Notify Azure tab
+                            // Notify Azure tab
                             this.postMessage(webviewId, {
                                 type: "groupDowntimeDeletedAzure",
                                 provider: "azure",
@@ -1748,7 +1748,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 userId: userIdAzureDelete
                             });
 
-                            // 🌐 Notify Multi-tab
+                            // Notify Multi-tab
                             this.postMessage(webviewId, {
                                 type: "groupDowntimeDeletedMulti",
                                 provider: "both",
@@ -1781,7 +1781,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         try {
                             const { groupName } = payload;
 
-                            // ✅ Call the CloudManager method to show downtime info
+                            // Call the CloudManager method to show downtime info
                             await this.cloudManager.viewGroupDowntime(groupName);
 
                         } catch (error) {
@@ -1928,7 +1928,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         console.log("🔹 Subscription changed to:", selectedSubscriptionId);
 
                         if (selectedSubscriptionId) {
-                            // ✅ Request resource groups for the selected subscription
+                            // Request resource groups for the selected subscription
                             vscode.postMessage({
                                 type: "getResourceGroups",
                                 provider: "azure",
@@ -1983,7 +1983,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     keyPairSelect.appendChild(option);
                                 });
                     
-                                // ✅ Select the first available key pair automatically
+                                // Select the first available key pair automatically
                                 keyPairSelect.value = message.keyPairs[0];
                             }
                         }
@@ -2257,7 +2257,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             const instanceList = document.getElementById("instancesTable");
 
-                            // 🔧 Remove placeholder row if it's still visible
+                            // Remove placeholder row if it's still visible
                             for (const child of instanceList.children) {
                                 const text = child.textContent.trim();
                                 if (text === "Waiting for connection..." || text === "No instances found.") {
@@ -2329,7 +2329,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             const vmList = document.querySelector("#vmsTable");
 
-                            // ✅ Remove any placeholder row (either "Waiting for connection..." or "No active VMs found.")
+                            // Remove any placeholder row (either "Waiting for connection..." or "No active VMs found.")
                             for (const child of vmList.children) {
                                 const text = child.textContent.trim();
                                 if (text === "Waiting for connection..." || text === "No active VMs found.") {
@@ -2443,7 +2443,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             console.log("✅ Downtime deleted for Azure group:", groupNameDel);
 
-                            // ✅ Find all VM entries in the list
+                            // Find all VM entries in the list
                             const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
 
                             vmEntries.forEach(entry => {
@@ -2475,7 +2475,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const stoppedInstances = message.stoppedInstances;
                             console.log("🔹 Updating UI for stopped AWS instances:", stoppedInstances);
 
-                            // 🔄 Update AWS-only table
+                            // Update AWS-only table
                             const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
                             stoppedInstances.forEach(instanceId => {
                                 instanceEntries.forEach(entry => {
@@ -2490,7 +2490,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🔄 Update multi-table
+                            // Update multi-table
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             stoppedInstances.forEach(instanceId => {
                                 multiEntries.forEach(entry => {
@@ -2514,7 +2514,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const stoppedVMs = message.stoppedVMs;
                             console.log("🔹 Updating UI for stopped Azure VMs:", stoppedVMs);
 
-                            // 🔄 Update Azure-only table
+                            // Update Azure-only table
                             const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
                             stoppedVMs.forEach(vm => {
                                 vmEntries.forEach(entry => {
@@ -2529,7 +2529,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🔄 Update multi-table
+                            // Update multi-table
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             stoppedVMs.forEach(vm => {
                                 multiEntries.forEach(entry => {
@@ -2553,7 +2553,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const terminatedInstances = message.terminatedInstances;
                             console.log("🛑 Updating status for terminated AWS instances:", terminatedInstances);
 
-                            // 🔄 Update AWS-only table
+                            // Update AWS-only table
                             const instanceEntries = document.querySelectorAll("#instancesTable .ec2-entry");
                             terminatedInstances.forEach(instanceId => {
                                 instanceEntries.forEach(entry => {
@@ -2570,7 +2570,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🔄 Update multi-table
+                            // Update multi-table
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             terminatedInstances.forEach(instanceId => {
                                 multiEntries.forEach(entry => {
@@ -2597,7 +2597,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                             const vmList = document.querySelector("#vmsTable");
 
-                            // 🔄 Remove from Azure-only table
+                            // Remove from Azure-only table
                             terminatedVMs.forEach(vm => {
                                 const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
 
@@ -2609,7 +2609,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🟪 Check if Azure VM list is now empty
+                            // Check if Azure VM list is now empty
                             const remainingAzureEntries = document.querySelectorAll("#vmsTable .vm-entry");
                             if (remainingAzureEntries.length === 0) {
                                 const noVMItem = document.createElement("li");
@@ -2621,7 +2621,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 vmList.appendChild(noVMItem);
                             }
 
-                            // 🔄 Also remove from multi-table
+                            // Also remove from multi-table
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             terminatedVMs.forEach(vm => {
                                 multiEntries.forEach(entry => {
@@ -2636,7 +2636,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🟪 Show "No active instances" in multi-table if it's now empty
+                            // Show "No active instances" in multi-table if it's now empty
                             const remainingMultiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             if (remainingMultiEntries.length === 0) {
                                 const noItem = document.createElement("li");
@@ -2653,7 +2653,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const startedInstances = message.startedInstances;
                             console.log("🚀 Updating status for started AWS instances:", startedInstances);
 
-                            // 🔄 Update in AWS-specific table
+                            // Update in AWS-specific table
                             const ec2Entries = document.querySelectorAll("#instancesTable .ec2-entry");
                             startedInstances.forEach(instanceId => {
                                 ec2Entries.forEach(entry => {
@@ -2668,7 +2668,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🔄 Also update in multi-table if it's present
+                            // Also update in multi-table if it's present
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             startedInstances.forEach(instanceId => {
                                 multiEntries.forEach(entry => {
@@ -2692,7 +2692,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                             const startedVMs = message.startedVMs;
                             console.log("🚀 Updating status for started Azure VMs:", startedVMs);
 
-                            // 🔄 Update in Azure-specific table
+                            // Update in Azure-specific table
                             const vmEntries = document.querySelectorAll("#vmsTable .vm-entry");
                             startedVMs.forEach(vm => {
                                 vmEntries.forEach(entry => {
@@ -2707,7 +2707,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 });
                             });
 
-                            // 🔄 Also update in multi-table
+                            // Also update in multi-table
                             const multiEntries = document.querySelectorAll("#allinstancesTable .all-instance-entry");
                             startedVMs.forEach(vm => {
                                 multiEntries.forEach(entry => {
@@ -2829,7 +2829,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     groupSelect.appendChild(option);
                                 });
 
-                                // ✅ Select the first available group automatically
+                                // Select the first available group automatically
                                 groupSelect.value = message.awsGroups[0];
                             }
                         }
@@ -2842,25 +2842,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // 🔄 Remove "Waiting..." option if it's the only one
+                            // Remove "Waiting..." option if it's the only one
                             const firstOption = groupSelectAws.options[0];
                             if (firstOption && firstOption.value === "") {
                                 groupSelectAws.removeChild(firstOption);
                             }
 
-                            // 🚫 Prevent duplicates
+                            // Prevent duplicates
                             const exists = Array.from(groupSelectAws.options).some(option => option.value === groupName);
                             if (exists) {
                                 return;
                             }
 
-                            // ➕ Append the new group
+                            // Append the new group
                             const option = document.createElement("option");
                             option.value = groupName;
                             option.textContent = groupName;
                             groupSelectAws.appendChild(option);
 
-                            // ✅ Optionally select the new group
+                            // Optionally select the new group
                             groupSelectAws.value = groupName;
                         }
 
@@ -2881,7 +2881,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     groupSelectAzure.appendChild(option);
                                 });
 
-                                // ✅ Select the first available group automatically
+                                // Select the first available group automatically
                                 groupSelectAzure.value = message.azureGroups[0];
                             }
                         }
@@ -2905,7 +2905,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                     groupSelectMulti.appendChild(option);
                                 });
 
-                                // ✅ Select the first group by default
+                                // Select the first group by default
                                 groupSelectMulti.value = message.multiGroups[0];
                             }
                         }
@@ -2919,25 +2919,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // 🔄 Remove "No groups found" option if it exists
+                            // Remove "No groups found" option if it exists
                             const firstOption = groupSelectAzure.options[0];
                             if (firstOption && firstOption.value === "") {
                                 groupSelectAzure.removeChild(firstOption);
                             }
 
-                            // 🚫 Prevent duplicates
+                            // Prevent duplicates
                             const exists = Array.from(groupSelectAzure.options).some(option => option.value === groupName);
                             if (exists) {
                                 return;
                             }
 
-                            // ➕ Append the new group
+                            // Append the new group
                             const option = document.createElement("option");
                             option.value = groupName;
                             option.textContent = groupName;
                             groupSelectAzure.appendChild(option);
 
-                            // ✅ Optionally select the new group
+                            // Optionally select the new group
                             groupSelectAzure.value = groupName;
                         }
 
@@ -2950,25 +2950,25 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                             }
 
-                            // 🔄 Remove "Waiting..." option if it exists
+                            // Remove "Waiting..." option if it exists
                             const firstOption = groupSelectMulti.options[0];
                             if (firstOption && firstOption.value === "") {
                                 groupSelectMulti.removeChild(firstOption);
                             }
 
-                            // 🚫 Prevent duplicates
+                            // Prevent duplicates
                             const exists = Array.from(groupSelectMulti.options).some(option => option.value === groupName);
                             if (exists) {
                                 return;
                             }
 
-                            // ➕ Append the new group
+                            // Append the new group
                             const option = document.createElement("option");
                             option.value = groupName;
                             option.textContent = groupName;
                             groupSelectMulti.appendChild(option);
 
-                            // ✅ Optionally select the new group
+                            // Optionally select the new group
                             groupSelectMulti.value = groupName;
                         }
 
@@ -3074,7 +3074,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         vscode.postMessage({
                             type: "changeRegion",
                             provider: "aws",
-                            webviewId,  // ✅ Sending webviewId to backend
+                            webviewId,  // Sending webviewId to backend
                             payload: { region }
                         });
                     });
@@ -3140,7 +3140,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                     document.getElementById("refreshaws").addEventListener("click", () => {
                         console.log("🔄 Refresh AWS Instances button clicked");
 
-                        // ✅ Send a message to VS Code extension
+                        // Send a message to VS Code extension
                         vscode.postMessage({
                             type: "refreshawsinstances",
                             webviewId
@@ -3152,7 +3152,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                     document.getElementById("refreshazure").addEventListener("click", () => {
                         console.log("🔄 Refresh Azure VMs button clicked");
 
-                        // ✅ Send a message to VS Code extension
+                        // Send a message to VS Code extension
                         vscode.postMessage({
                             type: "refreshazureinstances",
                             webviewId
@@ -3220,7 +3220,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
 
                         console.log("Sending Message from selected action", messageType);
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "aws",
@@ -3278,7 +3278,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                         }
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "azure",
@@ -3412,7 +3412,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                         }
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "aws",
@@ -3466,7 +3466,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                         }
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "azure",
@@ -3567,7 +3567,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                         }
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "aws",
@@ -3604,7 +3604,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                                 return;
                         }
 
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "azure",
@@ -3643,7 +3643,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
 
                         console.log("🔹 Sending multi-cloud downtime action:", messageType);
-                        // ✅ Send message to VS Code extension
+                        // Send message to VS Code extension
                         vscode.postMessage({
                             type: messageType,
                             provider: "both",
@@ -3721,7 +3721,7 @@ export class SidebarWebViewProvider implements WebviewViewProvider {
                         }
                     });
 
-                    // ✅ Auto-select the first available resource group
+                    // Auto-select the first available resource group
                     resourceGroupDropdown.value = groupsForSubscription[0]?.resourceGroupName || "";
                 }
             </script>

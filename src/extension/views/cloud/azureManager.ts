@@ -47,7 +47,7 @@ export class RefreshableVSCodeSessionCredential implements TokenCredential {
   
 
 export class AzureManager {
-    // ✅ Store both subscriptions and resource groups
+    // Store both subscriptions and resource groups
     private userSessions: Map<string, { 
         azureCredential: TokenCredential; 
         subscriptions: { subscriptionId: string; displayName: string }[]; 
@@ -102,7 +102,7 @@ export class AzureManager {
     
 
     /**
-     * ✅ Helper Function: Fetches resource groups for a subscription
+     * Helper Function: Fetches resource groups for a subscription
      */
     private async fetchResourceGroups(azureCredential: TokenCredential, subscriptionId: string) {
         try {
@@ -130,13 +130,13 @@ export class AzureManager {
     
             console.log(`📤 Fetching resource groups for Subscription ID: ${subscriptionId} and User ID: ${userId}`);
     
-            // ✅ Ensure the user session exists
+            // Ensure the user session exists
             const userSession = await this.getUserSession(userId);
             if (!userSession || !userSession.azureCredential) {
                 throw new Error("❌ Azure credentials not found. User may need to reauthenticate.");
             }
     
-            // ✅ Fetch resource groups dynamically
+            // Fetch resource groups dynamically
             const resourceGroups = await this.fetchResourceGroups(userSession.azureCredential, subscriptionId);
     
             if (!resourceGroups || resourceGroups.length === 0) {
@@ -153,7 +153,7 @@ export class AzureManager {
     }     
 
     /**
-     * ✅ Handles authentication for Azure users.
+     * Handles authentication for Azure users.
      */
     async authenticate() {
         try {
@@ -177,7 +177,7 @@ export class AzureManager {
             const accessToken = session.accessToken;
             const expiresOn = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-            // ✅ Persist credentials to Supabase
+            // Persist credentials to Supabase
             await database.storeAzureCredentials({
                 azure_id: azureId,
                 access_token: accessToken,
@@ -185,10 +185,10 @@ export class AzureManager {
                 account_label: accountLabel
             });
     
-            // Step 2: Use fast credential from VS Code
+            // Use fast credential from VS Code
             const azureCredential = new RefreshableVSCodeSessionCredential(session.account.id);
     
-            // Step 3: Fetch all subscriptions
+            // Fetch all subscriptions
             const subscriptionClient = new SubscriptionClient(azureCredential);
             const subscriptionsList = await subscriptionClient.subscriptions.list();
             const subscriptions: { subscriptionId: string; displayName: string }[] = [];
@@ -208,12 +208,12 @@ export class AzureManager {
     
             console.log("🔹 Retrieved Azure Subscriptions:", subscriptions);
     
-            // Step 4: Cache credential and subscriptions right away
+            // Cache credential and subscriptions right away
             this.userSessions.set(session.account.id, { azureCredential, subscriptions });
     
             const firstSubId = subscriptions[0].subscriptionId;
     
-            // Step 5: Fetch VMs, resource groups, and cost in parallel
+            // Fetch VMs, resource groups, and cost in parallel
             const [resourceGroupsList, vms, cost] = await Promise.all([
                 this.getResourceGroupsForSubscription("azure", session.account.id, firstSubId),
                 this.getUserVMs(session.account.id),
@@ -393,7 +393,7 @@ export class AzureManager {
             }
         };
 
-        // 🚀 Start VM creation asynchronously (non-blocking)
+        // Start VM creation asynchronously (non-blocking)
         const vmResult = await computeClient.virtualMachines.beginCreateOrUpdateAndWait(
             params.resourceGroup,
             params.vmName,
@@ -414,7 +414,7 @@ export class AzureManager {
         const allowedRegions = new Set(["eastus", "westus", "westeurope", "southeastasia"]);
         const limit = pLimit(INSTANCE_VIEW_CONCURRENCY);
     
-        // Step 1: Fetch VMs across all subscriptions concurrently
+        // Fetch VMs across all subscriptions concurrently
         const allVMs = (
             await Promise.all(userSession.subscriptions.map(async (subscription) => {
                 const computeClient = new ComputeManagementClient(azureCredential, subscription.subscriptionId);
@@ -438,7 +438,7 @@ export class AzureManager {
             }))
         ).flat();
     
-        // Step 2: Fetch instance views with concurrency control
+        // Fetch instance views with concurrency control
         const vmResults = await Promise.all(
             allVMs.map(vmInfo =>
                 limit(async () => {
@@ -468,11 +468,11 @@ export class AzureManager {
             )
         );
     
-        // Step 3: Enrich with instance group names
+        // Enrich with instance group names
         const instanceIds = vmResults.map(vm => vm.id);
         const instanceGroups = await database.getInstanceGroups("azure", instanceIds);
     
-        // Step 4: Get unique group names and fetch downtimes
+        // Get unique group names and fetch downtimes
         const uniqueGroupNames = [...new Set(Object.values(instanceGroups).filter(Boolean))];
     
         const groupDowntimes = await Promise.all(
@@ -489,7 +489,7 @@ export class AzureManager {
             ])
         );
     
-        // Step 5: Attach groupName and shutdownSchedule to each VM
+        // Attach groupName and shutdownSchedule to each VM
         const enrichedVMs = vmResults.map(vm => {
             const groupName = instanceGroups[vm.id] || "N/A";
             const shutdownSchedule = groupName !== "N/A" && downtimeMap[groupName]
@@ -530,7 +530,7 @@ export class AzureManager {
     
                 const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
     
-                // 🔍 Check current status before stopping
+                // Check current status before stopping
                 const instanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vmName);
                 const status = instanceView.statuses?.[1]?.displayStatus || "Unknown";
     
@@ -570,7 +570,7 @@ export class AzureManager {
     
                 const computeClient = new ComputeManagementClient(azureCredential, subscriptionId);
     
-                // 🔍 Check current status before starting
+                // Check current status before starting
                 const instanceView = await computeClient.virtualMachines.instanceView(resourceGroup, vmName);
                 const status = instanceView.statuses?.[1]?.displayStatus || "Unknown";
     

@@ -10,7 +10,7 @@ export class CloudManager {
 
     private constructor() {} // Prevents external instantiation
 
-    // ✅ Ensure a single instance exists
+    // Ensure a single instance exists
     public static getInstance(): CloudManager {
         if (!CloudManager.instance) {
             CloudManager.instance = new CloudManager();
@@ -18,7 +18,7 @@ export class CloudManager {
         return CloudManager.instance;
     }
 
-    // ✅ Getters for AWSManager and AzureManager
+    // Getters for AWSManager and AzureManager
     public getAWSManager() {
         return this.awsManager;
     }
@@ -72,7 +72,7 @@ export class CloudManager {
 
                 window.showInformationMessage(`✅ Successfully connected to AWS for account ${userAccountId}`);
             
-                // ✅ Return the userAccountId and keyPairs
+                // Return the userAccountId and keyPairs
                 return { userAccountId, keyPairs, ec2instances, usergroups, cost };
             
             } catch (error) {
@@ -196,13 +196,13 @@ export class CloudManager {
         if (provider === "aws") {
             console.log(`🔹 Changing AWS region for user ${userId} to: ${region}`);
     
-            // ✅ Ensure a valid session exists before proceeding
+            // Ensure a valid session exists before proceeding
             const keyPairs = await this.awsManager.changeRegion(userId, region);
             if (keyPairs.length === 0) {
                 console.warn(`⚠️ No key pairs found after region change.`);
             }
     
-            return keyPairs; // ✅ Return updated key pairs to be sent to the UI
+            return keyPairs; // Return updated key pairs to be sent to the UI
         } 
     
         console.error(`❌ Invalid provider specified: ${provider}`);
@@ -232,7 +232,7 @@ export class CloudManager {
         console.log(`📤 Shutting down instances for AWS user ${userIdAWS}:`, instanceIds);
 
         try {
-            // ✅ Call AWS Manager function (to be implemented in AWSManager.ts)
+            // Call AWS Manager function (to be implemented in AWSManager.ts)
             await this.awsManager.shutdownInstances(userIdAWS, instanceIds);
             console.log(`✅ Successfully initiated shutdown for instances: ${instanceIds.join(", ")}`);
         } catch (error) {
@@ -276,7 +276,7 @@ export class CloudManager {
         }
     
         try {
-            // ✅ Call AWS Manager function to fetch instances (we assume it exists)
+            // Call AWS Manager function to fetch instances (we assume it exists)
             const instances = await this.awsManager.fetchAllEC2InstancesAcrossRegions(userIdAWS);
     
             console.log(`✅ Retrieved ${instances.length} updated AWS instances`);
@@ -297,7 +297,7 @@ export class CloudManager {
         }
     
         try {
-            // ✅ Call Azure Manager function to fetch instances
+            // Call Azure Manager function to fetch instances
             const vms = await this.azureManager.getUserVMs(userIdAzure);
     
             console.log(`✅ Retrieved ${vms.length} updated Azure VMs`);
@@ -318,7 +318,7 @@ export class CloudManager {
         }
     
         try {
-            // ✅ Call AWS Manager function to terminate instances
+            // Call AWS Manager function to terminate instances
             await this.awsManager.terminateInstances(userIdAWS, instanceIds);
     
             console.log(`✅ Successfully terminated AWS instances: ${instanceIds.join(", ")}`);
@@ -370,7 +370,7 @@ export class CloudManager {
         }
     
         try {
-            // ✅ Call AWS Manager function to start instances
+            // Call AWS Manager function to start instances
             await this.awsManager.startInstances(userIdAWS, instanceIds);
     
             console.log(`✅ Successfully started AWS instances: ${instanceIds.join(", ")}`);
@@ -421,7 +421,7 @@ export class CloudManager {
       
           console.log(`📩 Creating ${provider.toUpperCase()} group "${groupName}" for users:`, userIds);
       
-          // ✅ Call the shared DB helper function
+          // Call the shared DB helper function
           await database.createInstanceGroup(
             provider,
             userIds,
@@ -485,7 +485,7 @@ export class CloudManager {
         instanceIds: string[] | { aws: string[]; azure: string[] }
         ) {
         try {
-            // ✅ Format the instance list properly for the database layer
+            // Format the instance list properly for the database layer
             const instanceList =
             provider === "both"
                 ? (instanceIds as { aws: string[]; azure: string[] })
@@ -499,10 +499,10 @@ export class CloudManager {
                 ? (userId as { aws: string; azure: string })
                 : userId;
 
-            // ✅ Call the database function
+            // Call the database function
             const result = await database.removeInstancesFromGroup(provider, userIdMap, instanceList);
 
-            // ✅ Feedback
+            // Feedback
             window.showInformationMessage(`✅ Successfully removed instance(s) from group.`);
             console.log(result);
             return "N/A";
@@ -515,21 +515,21 @@ export class CloudManager {
 
     async setGroupDowntime(provider: "aws" | "azure" | "both", groupName: string) {
         try {
-            // ✅ Prompt user for start time
+            // Prompt user for start time
             const startTime = await this.promptForInput("Enter Start Time", "YYYY-MM-DD HH:MM");
             if (!startTime) {
                 window.showErrorMessage("❌ Downtime setting canceled: No start time provided.");
                 return;
             }
     
-            // ✅ Prompt user for end time
+            // Prompt user for end time
             const endTime = await this.promptForInput("Enter End Time", "YYYY-MM-DD HH:MM");
             if (!endTime) {
                 window.showErrorMessage("❌ Downtime setting canceled: No end time provided.");
                 return;
             }
     
-            // ✅ Validate time format
+            // Validate time format
             const startDate = new Date(startTime);
             const endDate = new Date(endTime);
     
@@ -545,10 +545,10 @@ export class CloudManager {
     
             console.log(`📩 Setting downtime for ${provider.toUpperCase()} group: "${groupName}" from ${startTime} to ${endTime}.`);
     
-            // ✅ Call the database function to update downtime
+            // Call the database function to update downtime
             const result = await database.updateGroupDowntime(groupName, startTime, endTime);
     
-            // ✅ Provide feedback to the user
+            // Provide feedback to the user
             window.showInformationMessage(`✅ Downtime set for group "${groupName}" from ${startTime} to ${endTime}.`);
             console.log(result);
 
@@ -563,7 +563,7 @@ export class CloudManager {
         try {
             console.log(`📤 Removing downtime for group: '${groupName}'`);
     
-            // ✅ Call the database function to remove downtime for the given group
+            // Call the database function to remove downtime for the given group
             const success = await database.removeGroupDowntime(groupName);
     
             if (success) {

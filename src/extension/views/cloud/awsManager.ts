@@ -6,18 +6,18 @@ export class AWSManager {
    private userSessions: Map<string, { awsConfig?: AWS.Config; selectedRegion: string }> = new Map();
 
    /**
-    * ✅ Retrieves the stored AWS session for a user.
+    *  Retrieves the stored AWS session for a user.
     * @param userAccountId AWS Account ID (which we use as the user identifier)
     * @returns The user's AWS session or undefined if not authenticated.
     */
    async getUserSession(userAccountId: string): Promise<{ awsConfig?: AWS.Config; selectedRegion: string } | undefined> {
-        // ✅ Step 1: Check in-memory cache
+        // Check in-memory cache
         const session = this.userSessions.get(userAccountId);
         if (session?.awsConfig) {
             return session;
         }
 
-        // ✅ Step 2: Load from DB
+        // Load from DB
         const row = await database.getAWSCredentials(userAccountId);
         if (!row) {
             console.warn(`⚠️ No stored credentials found for AWS user ${userAccountId}`);
@@ -27,7 +27,7 @@ export class AWSManager {
         const now = Date.now();
         const expiration = new Date(row.expiration).getTime();
 
-        // ✅ Step 3: If expired, try to re-authenticate
+        // If expired, try to re-authenticate
         if (expiration < now) {
             console.log(`🔁 AWS credentials expired for ${userAccountId}, re-authenticating...`);
             try {
@@ -37,7 +37,7 @@ export class AWSManager {
                 return undefined;
             }
         } else {
-            // ✅ Step 4: If still valid, create and cache awsConfig
+            // If still valid, create and cache awsConfig
             const awsConfig = new AWS.Config({
                 accessKeyId: row.access_key_id,
                 secretAccessKey: row.secret_access_key,
@@ -51,13 +51,13 @@ export class AWSManager {
             });
         }
 
-        // ✅ Step 5: Return from memory again (freshly set)
+        // Return from memory again (freshly set)
         return this.userSessions.get(userAccountId);
     }
 
 
    /**
-    * ✅ Updates or sets the AWS session for a user.
+    * Updates or sets the AWS session for a user.
     * @param userAccountId AWS Account ID
     * @param session The updated session object
     */
@@ -101,7 +101,7 @@ export class AWSManager {
                throw new Error("Failed to assume IAM role.");
            }
 
-           // ✅ Store per-account AWS session (using AWS Account ID as key)
+           // Store per-account AWS session (using AWS Account ID as key)
            const awsConfig = new AWS.Config({
                accessKeyId: assumedRole.Credentials.AccessKeyId,
                secretAccessKey: assumedRole.Credentials.SecretAccessKey,
@@ -109,7 +109,7 @@ export class AWSManager {
                region: "us-east-2", // Default region
            });
 
-           // ✅ Use the new helper function to store the session
+           // Use the new helper function to store the session
            this.updateUserSession(userAccountId, { awsConfig, selectedRegion: "us-east-2" });
 
            await database.storeAWSCredentials({
@@ -167,7 +167,7 @@ export class AWSManager {
         const region = userSession.selectedRegion;
         console.log(`🔹 Using AWS region: ${region}`);
 
-        // ✅ Initialize EC2 service with correct region
+        // Initialize EC2 service with correct region
         const ec2 = new AWS.EC2({
             accessKeyId: userSession.awsConfig?.credentials?.accessKeyId,
             secretAccessKey: userSession.awsConfig?.credentials?.secretAccessKey,
@@ -175,7 +175,7 @@ export class AWSManager {
             region: region
         });
 
-        // 🔹 Get the latest AMI for the selected region
+        // Get the latest AMI for the selected region
         console.log("🔍 Fetching latest AMI...");
         const latestAmi = await this.getLatestAMI(userId, "linux-postgres"); // Adjust template as needed
         if (!latestAmi) {
@@ -183,7 +183,7 @@ export class AWSManager {
             return;
         }
 
-        // 🔹 Step 1: Find a Public Subnet in the Region
+        // Find a Public Subnet in the Region
         console.log("🔍 Searching for a public subnet...");
         const subnetId = await this.findPublicSubnet(userId);
         if (!subnetId) {
@@ -192,7 +192,7 @@ export class AWSManager {
         }
         console.log(`✅ Found Public Subnet: ${subnetId}`);
 
-        // 🔹 Step 2: Ensure a Security Group Exists that Allows SSH
+        // Ensure a Security Group Exists that Allows SSH
         console.log("🔍 Ensuring a security group with SSH access exists...");
         const securityGroupId = await this.getOrCreateSecurityGroup(userId);
         if (!securityGroupId) {
@@ -201,7 +201,7 @@ export class AWSManager {
         }
         console.log(`✅ Using Security Group: ${securityGroupId}`);
 
-        // 🔹 Step 3: Launch the EC2 Instance
+        // Launch the EC2 Instance
         const instanceParams = {
             ImageId: latestAmi,
             InstanceType: "t3.micro",
@@ -212,7 +212,7 @@ export class AWSManager {
                 {
                     ResourceType: "instance",
                     Tags: [
-                        { Key: "Name", Value: instanceName }, // ✅ Set instance name
+                        { Key: "Name", Value: instanceName }, // Set instance name
                         { Key: "Project", Value: "DevTest" }
                     ]
                 }
@@ -236,7 +236,7 @@ export class AWSManager {
                 const instanceId = result.Instances[0].InstanceId ?? null;
                 console.log(`📌 Instance ID for user ${userId}:`, instanceId);
 
-                // ✅ Wait for instance to be in "running" state and get public IP
+                // Wait for instance to be in "running" state and get public IP
                 const publicIp = instanceId ? await this.getInstancePublicIp(userId, instanceId) : null;
 
                 if (publicIp) {
@@ -284,7 +284,7 @@ export class AWSManager {
 
         console.log(`🔹 Fetching latest AMI for user ${userId} in region ${region}...`);
 
-        // 🔍 Define AMI filters based on the requested template
+        // Define AMI filters based on the requested template
         let filters: AWS.EC2.Filter[];
         switch (template) {
             case "linux-postgres":
@@ -316,11 +316,11 @@ export class AWSManager {
 
         try {
             const describeImagesParams = {
-                Owners: ["amazon"], // ✅ Only fetch AMIs owned by AWS
+                Owners: ["amazon"], // Only fetch AMIs owned by AWS
                 Filters: filters
             };
 
-            // 🔹 Fetch AMIs matching the filters
+            // Fetch AMIs matching the filters
             const amiResult = await ec2.describeImages(describeImagesParams).promise();
 
             if (!amiResult.Images || amiResult.Images.length === 0) {
@@ -328,7 +328,7 @@ export class AWSManager {
                 return null;
             }
 
-            // ✅ Pick the latest AMI by creation date
+            // Pick the latest AMI by creation date
             const latestAmi = amiResult.Images.sort((a, b) =>
                 b.CreationDate! > a.CreationDate! ? 1 : -1
             )[0].ImageId;
@@ -362,7 +362,7 @@ export class AWSManager {
         console.log(`🔹 Searching for a public subnet in region ${region} for user ${userId}...`);
     
         try {
-            // 🔹 Fetch all subnets in the region
+            // Fetch all subnets in the region
             const subnets = await ec2.describeSubnets().promise();
     
             if (!subnets.Subnets || subnets.Subnets.length === 0) {
@@ -370,7 +370,7 @@ export class AWSManager {
                 return null;
             }
     
-            // 🔹 Filter subnets to find one that allows public IP assignment
+            // Filter subnets to find one that allows public IP assignment
             for (const subnet of subnets.Subnets) {
                 if (subnet.MapPublicIpOnLaunch) {
                     console.log(`✅ Found public subnet for user ${userId}: ${subnet.SubnetId}`);
@@ -407,7 +407,7 @@ export class AWSManager {
         const groupName = `Public-SSH-SecurityGroup-${userId}`; // Unique group per user
     
         try {
-            // 🔍 Check if the security group already exists
+            // Check if the security group already exists
             const existingGroups = await ec2.describeSecurityGroups({ GroupNames: [groupName] }).promise();
             if (existingGroups.SecurityGroups && existingGroups.SecurityGroups.length > 0) {
                 console.log(`✅ Security Group already exists for user ${userId}:`, existingGroups.SecurityGroups[0].GroupId);
@@ -418,7 +418,7 @@ export class AWSManager {
         }
     
         try {
-            // 🔹 Retrieve the default VPC ID to create the security group in the correct VPC
+            // Retrieve the default VPC ID to create the security group in the correct VPC
             const vpcId = await this.getDefaultVpcId(ec2);
             if (!vpcId) {
                 console.error(`❌ No default VPC found in region ${region}.`);
@@ -426,7 +426,7 @@ export class AWSManager {
                 return "";
             }
     
-            // 🔹 Create a new security group
+            // Create a new security group
             const sgResult = await ec2.createSecurityGroup({
                 GroupName: groupName,
                 Description: "Allows SSH access from anywhere",
@@ -436,7 +436,7 @@ export class AWSManager {
             const securityGroupId = sgResult.GroupId!;
             console.log(`✅ Created Security Group for user ${userId}: ${securityGroupId}`);
     
-            // 🔹 Add an inbound rule to allow SSH (Port 22) from anywhere
+            // Add an inbound rule to allow SSH (Port 22) from anywhere
             await ec2.authorizeSecurityGroupIngress({
                 GroupId: securityGroupId,
                 IpPermissions: [
@@ -502,7 +502,7 @@ export class AWSManager {
     
                 if (instance?.PublicIpAddress) {
                     console.log(`✅ Public IP found for instance ${instanceId} (User: ${userId}): ${instance.PublicIpAddress}`);
-                    return instance.PublicIpAddress;  // ✅ Return Public IP when found
+                    return instance.PublicIpAddress;  // Return Public IP when found
                 }
     
                 console.log(`⏳ Waiting for public IP assignment... (${attempt + 1}/10) (User: ${userId})`);
@@ -532,7 +532,7 @@ export class AWSManager {
     * @param userId Unique user identifier.
     */
    async fetchKeyPairs(userAccountId: string): Promise<string[]> {
-        // ✅ Ensure session exists for the user
+        // Ensure session exists for the user
         const userSession = await this.getUserSession(userAccountId);
         if (!userSession || !userSession.awsConfig) {
             console.error(`❌ No valid AWS session found for account ${userAccountId}. Please authenticate first.`);
@@ -540,26 +540,26 @@ export class AWSManager {
             return [];
         }
 
-        const region = userSession.selectedRegion; // ✅ Get the selected region
+        const region = userSession.selectedRegion; // Get the selected region
 
         console.log(`🔹 Fetching AWS key pairs for account ${userAccountId} in region: ${region}`);
 
-        // ✅ Ensure the EC2 client uses the correct region
+        // Ensure the EC2 client uses the correct region
         const ec2 = new AWS.EC2({
             accessKeyId: userSession.awsConfig.credentials?.accessKeyId,
             secretAccessKey: userSession.awsConfig.credentials?.secretAccessKey,
             sessionToken: userSession.awsConfig.credentials?.sessionToken,
-            region: region // ✅ Ensure EC2 is initialized with the selected region
+            region: region // Ensure EC2 is initialized with the selected region
         });
 
         try {
-            // ✅ Fetch key pairs **only** for the selected region
+            // Fetch key pairs **only** for the selected region
             const result = await ec2.describeKeyPairs().promise();
             const keyPairs = result.KeyPairs?.map(kp => kp.KeyName!) || [];
 
             console.log(`✅ Retrieved ${keyPairs.length} key pairs for account ${userAccountId} in region ${region}`);
 
-            // ✅ Handle case where no key pairs exist
+            // Handle case where no key pairs exist
             if (keyPairs.length === 0) {
                 console.warn(`⚠️ No key pairs found for account ${userAccountId} in region ${region}`);
                 window.showWarningMessage(`No key pairs found in region ${region}. Please create one in the AWS console.`);
@@ -595,7 +595,7 @@ export class AWSManager {
 
         interface Instance {
             instanceId: string;
-            instanceName: string; // ✅ Added instance name
+            instanceName: string; 
             instanceType: string;
             state: string;
             region: string;
@@ -704,7 +704,7 @@ export class AWSManager {
    async changeRegion(userAccountId: string, region: string): Promise<string[]> {
        console.log(`🔹 Changing AWS region for account ${userAccountId} to: ${region}`);
 
-       // ✅ Retrieve the user session
+       // Retrieve the user session
        const userSession = await this.getUserSession(userAccountId);
        if (!userSession) {
            console.error(`❌ No active AWS session found for account ${userAccountId}.`);
@@ -712,12 +712,12 @@ export class AWSManager {
            return [];
        }
 
-       // ✅ Update the session with the new region
+       // Update the session with the new region
        userSession.selectedRegion = region;
-       this.updateUserSession(userAccountId, userSession); // ✅ Save updated session
+       this.updateUserSession(userAccountId, userSession); // Save updated session
 
        try {
-           // ✅ Fetch key pairs for the new region
+           // Fetch key pairs for the new region
            const keyPairs: string[] = await this.fetchKeyPairs(userAccountId);
 
            console.log(`✅ Successfully changed AWS region to ${region} and fetched key pairs.`);
@@ -761,7 +761,7 @@ export class AWSManager {
         });
     
         try {
-            // 🔍 Describe instances to get current states
+            // Describe instances to get current states
             const describeResult = await ec2.describeInstances({ InstanceIds: instanceIds }).promise();
     
             const runningInstances = describeResult.Reservations?.flatMap(reservation =>
@@ -798,7 +798,7 @@ export class AWSManager {
             throw new Error("At least one instance ID is required to terminate instances.");
         }
     
-        // ✅ Retrieve the user session
+        // Retrieve the user session
         const userSession = await this.getUserSession(userIdAWS);
         if (!userSession || !userSession.awsConfig?.credentials?.accessKeyId) {
             console.error(`❌ No valid AWS session found for user ${userIdAWS}. Please authenticate first.`);
@@ -809,7 +809,7 @@ export class AWSManager {
         const region = userSession.selectedRegion;
         console.log(`📤 Initiating termination for instances in region ${region}:`, instanceIds);
     
-        // ✅ Initialize EC2 service with correct credentials
+        // Initialize EC2 service with correct credentials
         const ec2 = new AWS.EC2({
             accessKeyId: userSession.awsConfig.credentials.accessKeyId,
             secretAccessKey: userSession.awsConfig.credentials.secretAccessKey,
@@ -818,7 +818,7 @@ export class AWSManager {
         });
     
         try {
-            // ✅ Send terminate request to AWS
+            // Send terminate request to AWS
             const response = await ec2.terminateInstances({ InstanceIds: instanceIds }).promise();
     
             console.log(`✅ Termination initiated for instances: ${instanceIds.join(", ")}`, response);
@@ -857,7 +857,7 @@ export class AWSManager {
         });
     
         try {
-            // 🔍 Describe instances to check their current state
+            // Describe instances to check their current state
             const describeResult = await ec2.describeInstances({ InstanceIds: instanceIds }).promise();
     
             const stoppedInstances = describeResult.Reservations?.flatMap(reservation =>

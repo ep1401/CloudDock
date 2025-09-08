@@ -2,11 +2,11 @@ import { CloudManager } from "./cloud/cloudManager";
 import * as database from "./database/db";
 
 class BackgroundScheduler {
-    private cloudManager = CloudManager.getInstance(); // ✅ Always the same instance
+    private cloudManager = CloudManager.getInstance(); // Always the same instance
     private awsManager = this.cloudManager.getAWSManager();
     private azureManager = this.cloudManager.getAzureManager();
 
-    // ✅ Keeps track of handled groups to avoid repeated actions
+    // Keeps track of handled groups to avoid repeated actions
     private handledGroups: Map<string, "stopped" | "started"> = new Map();
 
     constructor() {
@@ -15,7 +15,7 @@ class BackgroundScheduler {
     }
 
     /**
-     * 🔄 Starts the monitoring loop that checks for instance downtimes.
+     * Starts the monitoring loop that checks for instance downtimes.
      */
     private async startMonitoring() {
         console.log("⏳ Background scheduler started. Checking downtimes every minute...");
@@ -30,7 +30,7 @@ class BackgroundScheduler {
     }
 
     /**
-     * 🔎 Retrieves all scheduled downtimes and manages instances accordingly.
+     * Retrieves all scheduled downtimes and manages instances accordingly.
      */
     private async checkAndHandleDowntimes() {
         console.log("🔍 Checking scheduled downtimes...");
@@ -63,7 +63,7 @@ class BackgroundScheduler {
                 azure_id: i.azure_id
             }));
     
-            // ✅ Check for deleted AWS/Azure instances and remove them from DB
+            // Check for deleted AWS/Azure instances and remove them from DB
             try {
                 const awsUserId = awsInstances[0]?.aws_id;
                 const azureUserId = azureInstances[0]?.azure_id;
@@ -101,7 +101,7 @@ class BackgroundScheduler {
                 console.error("❌ Error cleaning up stale instances:", cleanupError);
             }
     
-            // ✅ Determine action based on current time
+            // Determine action based on current time
             if (now >= start && now < end) {
                 if (this.handledGroups.get(groupName) !== "stopped") {
                     console.log(`⏳ Group '${groupName}' is in scheduled downtime. Stopping instances...`);
@@ -118,7 +118,7 @@ class BackgroundScheduler {
         }
     }       
     /**
-     * 🛑 Stops all instances in the specified group **only if running**.
+     * Stops all instances in the specified group **only if running**.
      * @param groupName The name of the group whose instances should be stopped.
      */
     private async stopInstancesForGroup(groupName: string, awsInstances: any[], azureInstances: any[]) {
@@ -131,7 +131,7 @@ class BackgroundScheduler {
         if (azureInstances.length > 0) {
             console.log("azureInstances", azureInstances);
     
-            // ✅ Correct the format
+            // Correct the format
             const azureToStop = azureInstances.map(i => ({
                 vmId: i.instance_id,              // ✅ map instance_id → vmId
                 subscriptionId: i.sub_name        // ✅ map sub_name → subscriptionId
@@ -144,18 +144,18 @@ class BackgroundScheduler {
     
 
     /**
-     * 🚀 Starts all instances in the specified group **only if stopped**.
+     * Starts all instances in the specified group **only if stopped**.
      * @param groupName The name of the group whose instances should be started.
      */
     private async startInstancesForGroup(groupName: string, awsInstances: any[], azureInstances: any[]) {
-        // ✅ Start AWS instances that are **currently stopped**
+        // Start AWS instances that are **currently stopped**
         if (awsInstances.length > 0) {
             const awsInstanceIds: string[] = awsInstances.map(i => i.instance_id); // make sure this is a string[]
             console.log(`🚀 Starting AWS instances for group '${groupName}':`, awsInstanceIds);
             await this.awsManager.startInstances(awsInstances[0].aws_id, awsInstanceIds); // pass only string[]
         }
     
-        // ✅ Start Azure instances
+        // Start Azure instances
         if (azureInstances.length > 0) {
             // 🛠️ Map Azure instance fields correctly for startVMs
             const azureToStart = azureInstances.map(i => ({
@@ -169,6 +169,6 @@ class BackgroundScheduler {
     }                  
 }
 
-// ✅ Initialize the background scheduler
+// Initialize the background scheduler
 const scheduler = new BackgroundScheduler();
 export default scheduler;

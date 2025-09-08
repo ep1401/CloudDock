@@ -18,7 +18,7 @@ export const createInstanceGroup = async (
   subscriptionIds?: string[]
 ): Promise<string> => {
   try {
-    // ✅ Check group name uniqueness
+    // Check group name uniqueness
     const { data: existingGroup, error: groupError } = await supabase
       .from("instance_groups")
       .select("group_id")
@@ -28,14 +28,14 @@ export const createInstanceGroup = async (
     if (groupError) throw new Error(`Error checking group name: ${groupError.message}`);
     if (existingGroup) throw new Error(`A group with the name '${groupName}' already exists.`);
 
-    // ✅ Create group
+    // Create group
     const groupId = uuidv4();
     const { error: insertGroupError } = await supabase
       .from("instance_groups")
       .insert([{ group_id: groupId, group_name: groupName }]);
     if (insertGroupError) throw new Error(`Error creating group: ${insertGroupError.message}`);
 
-    // ✅ Multi-cloud session insert
+    // Multi-cloud session insert
     if (provider === "both" && userIds.aws && userIds.azure) {
       const { error: multiError } = await supabase
         .from("multi_sessions")
@@ -49,7 +49,7 @@ export const createInstanceGroup = async (
       if (multiError) throw new Error(`Error creating multi-session mapping: ${multiError.message}`);
     }
 
-    // ✅ Add group ID to each session and update/insert instances
+    // Add group ID to each session and update/insert instances
     const updateSessionsAndInstances = async (
       cloud: "aws" | "azure",
       ids: string[],
@@ -62,7 +62,7 @@ export const createInstanceGroup = async (
 
       if (!userId || ids.length === 0) return;
 
-      // ✅ Update session with new group_id
+      // Update session with new group_id
       const { data: sessionData, error: sessionErr } = await supabase
         .from(sessionTable)
         .select("group_ids")
@@ -86,7 +86,7 @@ export const createInstanceGroup = async (
           .insert([{ [idColumn]: userId, group_ids: updatedGroups }]);
       }
 
-      // ✅ Handle instance updates/inserts
+      // Handle instance updates/inserts
       const { data: existing, error: fetchErr } = await supabase
         .from(instanceTable)
         .select("instance_id")
@@ -128,7 +128,7 @@ export const createInstanceGroup = async (
       await Promise.all(updatePromises);
     };
 
-    // ✅ Apply updates by provider
+    // Apply updates by provider
     if (provider === "aws" || provider === "both") {
       await updateSessionsAndInstances("aws", instanceList.aws || []);
     }
@@ -189,7 +189,7 @@ export const addInstancesToGroup = async (
   subscriptionIds?: string[]
 ): Promise<string> => {
   try {
-    // ✅ Step 1: Get group ID
+    // Get group ID
     const { data: groupData, error: groupError } = await supabase
       .from("instance_groups")
       .select("group_id")
@@ -201,7 +201,7 @@ export const addInstancesToGroup = async (
 
     const groupId = groupData.group_id;
 
-    // ✅ Step 2: Check if group is in multi_sessions table
+    // Check if group is in multi_sessions table
     const { data: multiEntry, error: multiError } = await supabase
       .from("multi_sessions")
       .select("group_id")
@@ -212,7 +212,7 @@ export const addInstancesToGroup = async (
 
     const isMultiGroup = !!multiEntry;
 
-    // ✅ Step 3: Validation for non-multi groups
+    // Validation for non-multi groups
     if (!isMultiGroup) {
       const hasAwsInstances = instanceList.aws && instanceList.aws.length > 0;
       const hasAzureInstances = instanceList.azure && instanceList.azure.length > 0;
@@ -253,7 +253,7 @@ export const addInstancesToGroup = async (
       }
     }
 
-    // ✅ Step 4: Upsert instances
+    // Upsert instances
     const upsertInstances = async (
       instances?: string[],
       instanceTable?: string,
@@ -287,13 +287,13 @@ export const addInstancesToGroup = async (
       }
     };
 
-    // ✅ Handle AWS
+    // Handle AWS
     if (instanceList.aws?.length) {
       const awsId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
       await upsertInstances(instanceList.aws, "aws_instances", "aws_id", undefined, awsId);
     }
 
-    // ✅ Handle Azure
+    // Handle Azure
     if (instanceList.azure?.length) {
       const azureId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
       await upsertInstances(instanceList.azure, "azure_instances", "azure_id", subscriptionIds, azureId);
@@ -313,7 +313,7 @@ export const removeInstancesFromGroup = async (
   instanceList: { aws?: string[]; azure?: string[] }
 ): Promise<string> => {
   try {
-    // ✅ Helper function to delete instances and validate ownership
+    // Helper function to delete instances and validate ownership
     const deleteInstances = async (
       instances?: string[],
       instanceTable?: string,
@@ -333,13 +333,13 @@ export const removeInstancesFromGroup = async (
       }
     };
 
-    // ✅ AWS removal
+    // AWS removal
     if (provider === "aws" || provider === "both") {
       const awsUserId = provider === "both" ? (userId as { aws: string }).aws : (userId as string);
       await deleteInstances(instanceList.aws, "aws_instances", "aws_id", awsUserId);
     }
 
-    // ✅ Azure removal
+    // Azure removal
     if (provider === "azure" || provider === "both") {
       const azureUserId = provider === "both" ? (userId as { azure: string }).azure : (userId as string);
       await deleteInstances(instanceList.azure, "azure_instances", "azure_id", azureUserId);
@@ -360,7 +360,7 @@ export const getUserGroups = async (
     let awsGroups: string[] = [];
     let azureGroups: string[] = [];
 
-    // ✅ Fetch multi-cloud group IDs (used for filtering)
+    // Fetch multi-cloud group IDs (used for filtering)
     const { data: multiSessions, error: multiError } = await supabase
       .from("multi_sessions")
       .select("group_id");
@@ -371,7 +371,7 @@ export const getUserGroups = async (
 
     const multiGroupIds = new Set(multiSessions?.map(m => m.group_id) || []);
 
-    // ✅ Fetch AWS group names if awsId is provided
+    // Fetch AWS group names if awsId is provided
     if (awsId) {
       const { data: awsData, error: awsError } = await supabase
         .from("aws_sessions")
@@ -401,7 +401,7 @@ export const getUserGroups = async (
       }
     }
 
-    // ✅ Fetch Azure group names if azureId is provided
+    // Fetch Azure group names if azureId is provided
     if (azureId) {
       const { data: azureData, error: azureError } = await supabase
         .from("azure_sessions")
@@ -443,7 +443,7 @@ export const getMultiUserGroups = async (
   azureId: string
 ): Promise<string[]> => {
   try {
-    // ✅ Step 1: Look up multi-cloud sessions for this AWS & Azure combo
+    // Look up multi-cloud sessions for this AWS & Azure combo
     const { data: multiData, error: multiError } = await supabase
       .from("multi_sessions")
       .select("group_id")
@@ -458,7 +458,7 @@ export const getMultiUserGroups = async (
 
     if (groupIds.length === 0) return [];
 
-    // ✅ Step 2: Get group names from instance_groups
+    // Get group names from instance_groups
     const { data: groupNameData, error: groupNameError } = await supabase
       .from("instance_groups")
       .select("group_name")
@@ -481,7 +481,7 @@ export const updateGroupDowntime = async (
   endTime: string
 ): Promise<string> => {
   try {
-      // ✅ Step 1: Retrieve the group ID based on the group name
+      // Retrieve the group ID based on the group name
       const { data: groupData, error: groupError } = await supabase
           .from("instance_groups")
           .select("group_id")
@@ -498,7 +498,7 @@ export const updateGroupDowntime = async (
 
       const groupId = groupData.group_id;
 
-      // ✅ Step 2: Update or insert the group downtime
+      // Update or insert the group downtime
       const { error: upsertError } = await supabase
           .from("group_downtime")
           .upsert(
@@ -523,7 +523,7 @@ export const updateGroupDowntime = async (
 
 export const getGroupDowntime = async (groupName: string) => {
   try {
-      // ✅ Step 1: Retrieve the group ID based on the group name
+      // Retrieve the group ID based on the group name
       const { data: groupData, error: groupError } = await supabase
           .from("instance_groups")
           .select("group_id")
@@ -541,7 +541,7 @@ export const getGroupDowntime = async (groupName: string) => {
 
       const groupId = groupData.group_id;
 
-      // ✅ Step 2: Query the group_downtime table using the retrieved group ID
+      // Query the group_downtime table using the retrieved group ID
       const { data: downtimeData, error: downtimeError } = await supabase
           .from("group_downtime")
           .select("start_time, end_time")
@@ -557,7 +557,7 @@ export const getGroupDowntime = async (groupName: string) => {
           return { startTime: "N/A", endTime: "N/A" };
       }
 
-      // ✅ Step 3: Return the retrieved downtime
+      // Return the retrieved downtime
       return {
           startTime: downtimeData.start_time ?? "N/A",
           endTime: downtimeData.end_time ?? "N/A"
@@ -570,7 +570,7 @@ export const getGroupDowntime = async (groupName: string) => {
 
 export const removeGroupDowntime = async (groupName: string): Promise<boolean> => {
   try {
-      // ✅ Step 1: Retrieve the group ID based on the group name
+      // Retrieve the group ID based on the group name
       const { data: groupData, error: groupError } = await supabase
           .from("instance_groups")
           .select("group_id")
@@ -588,7 +588,7 @@ export const removeGroupDowntime = async (groupName: string): Promise<boolean> =
 
       const groupId = groupData.group_id;
 
-      // ✅ Step 2: Delete the row from the group_downtime table
+      // Delete the row from the group_downtime table
       const { error: deleteError } = await supabase
           .from("group_downtime")
           .delete()
@@ -609,7 +609,7 @@ export const removeGroupDowntime = async (groupName: string): Promise<boolean> =
 
 export const getAllGroupDowntimes = async () => {
   try {
-      // ✅ Step 1: Define the expected type structure
+      // Define the expected type structure
       type GroupDowntime = {
           group_id: string;
           start_time: string;
@@ -617,24 +617,24 @@ export const getAllGroupDowntimes = async () => {
           instance_groups: { group_name: string } | null;
       };
 
-      // ✅ Step 2: Retrieve all group downtimes with their group names
+      // Retrieve all group downtimes with their group names
       const { data, error } = await supabase
           .from("group_downtime")
           .select("group_id, start_time, end_time, instance_groups (group_name)")
           .returns<GroupDowntime[]>(); // Explicit return type
 
-      // ✅ Step 3: Handle errors
+      // Handle errors
       if (error) {
           throw new Error(`Error retrieving group downtimes: ${error.message}`);
       }
 
-      // ✅ Step 4: If no data found, return an empty array
+      // If no data found, return an empty array
       if (!data || data.length === 0) {
           console.warn("⚠️ No group downtimes found.");
           return [];
       }
 
-      // ✅ Step 5: Ensure correct extraction of `group_name`
+      // Ensure correct extraction of `group_name`
       return data.map(downtime => ({
           groupName: downtime.instance_groups?.group_name || "Unknown",
           startTime: downtime.start_time,
@@ -649,7 +649,7 @@ export const getAllGroupDowntimes = async () => {
 
 export const getInstancesByGroup = async (groupName: string) => {
   try {
-    // ✅ Step 1: Retrieve the group ID based on the group name
+    // Retrieve the group ID based on the group name
     const { data: groupData, error: groupError } = await supabase
       .from("instance_groups")
       .select("group_id")
@@ -667,7 +667,7 @@ export const getInstancesByGroup = async (groupName: string) => {
 
     const groupId = groupData.group_id;
 
-    // ✅ Step 2: Retrieve AWS instances
+    // Retrieve AWS instances
     const { data: awsInstances, error: awsError } = await supabase
       .from("aws_instances")
       .select("instance_id, aws_id")
@@ -677,7 +677,7 @@ export const getInstancesByGroup = async (groupName: string) => {
       throw new Error(`Error retrieving AWS instances: ${awsError.message}`);
     }
 
-    // ✅ Step 3: Retrieve Azure instances (with subscription ID)
+    // Retrieve Azure instances (with subscription ID)
     const { data: azureInstances, error: azureError } = await supabase
       .from("azure_instances")
       .select("instance_id, azure_id, sub_name") // ← added sub_name here
